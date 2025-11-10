@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from "react";
-// import { useRouter } from 'next/navigation'; // สำหรับแอปจริง
+import { useRouter } from 'next/navigation';
 
 // --- ไอคอน SVG ---
 const LogOutIcon = () => (
@@ -178,8 +178,8 @@ const mockData = {
  * หน้าหลัก (Dashboard)
  * แสดงภาพรวมทางการเงินและเมนูลัดต่างๆ
  */
-function DashboardPage(): React.ReactElement {
-  // const router = useRouter(); // สำหรับแอปจริง
+function DashboardPage() {
+  const router = useRouter();
   const [data, setData] = useState(mockData);
   const [showLogoutToast, setShowLogoutToast] = useState(false);
 
@@ -203,13 +203,7 @@ function DashboardPage(): React.ReactElement {
     }, 2000);
   };
 
-  /**
-   * ฟังก์ชันจำลองการนำทาง (สำหรับ Preview)
-   */
-  const mockNavigate = (path: string, pageName: string) => {
-    alert(`(Mock Navigate)\nกำลังไปที่: ${pageName}\n(Path: ${path})`);
-    // ในแอปจริง ให้ใช้ router.push(path) หรือ <Link>
-  };
+  // ลบ mockNavigate
 
   return (
     <div className="min-h-screen bg-gray-100 font-inter">
@@ -309,9 +303,7 @@ function DashboardPage(): React.ReactElement {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* ปุ่ม: บันทึกรายรับ/รายจ่าย */}
             <button
-              onClick={() =>
-                mockNavigate("/transactions/new", "หน้าบันทึกรายรับ/รายจ่าย")
-              }
+              onClick={() => router.push("/transactions/new")}
               className="flex items-center justify-center p-4 bg-blue-600 text-white font-medium rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition duration-300"
             >
               <PlusCircleIcon />
@@ -320,7 +312,7 @@ function DashboardPage(): React.ReactElement {
 
             {/* ปุ่ม: จัดการหมวดหมู่ */}
             <button
-              onClick={() => mockNavigate("/categories", "หน้าจัดการหมวดหมู่")}
+              onClick={() => router.push("/type")}
               className="flex items-center justify-center p-4 bg-gray-700 text-white font-medium rounded-lg shadow-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50 transition duration-300"
             >
               <CogIcon />
@@ -329,7 +321,7 @@ function DashboardPage(): React.ReactElement {
 
             {/* ปุ่ม: ดูประวัติทั้งหมด */}
             <button
-              onClick={() => mockNavigate("/history", "หน้าประวัติทั้งหมด")}
+              onClick={() => router.push("/history")}
               className="flex items-center justify-center p-4 bg-gray-200 text-gray-800 font-medium rounded-lg shadow-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-50 transition duration-300"
             >
               <ClipboardListIcon />
