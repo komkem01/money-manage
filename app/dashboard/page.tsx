@@ -163,6 +163,13 @@ const mockData = {
       type: "expense",
       date: "2025-11-07",
     },
+    {
+      id: "5",
+      description: "ซื้อของ",
+      amount: 300.0,
+      type: "expense",
+      date: "2025-11-07",
+    },
   ] as Transaction[],
 };
 // ------------------------------
