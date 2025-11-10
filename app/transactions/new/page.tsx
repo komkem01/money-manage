@@ -1,6 +1,6 @@
 "use client";
 import React, { useState } from "react";
-// import { useRouter } from 'next/navigation'; // สำหรับแอปจริง
+import { useRouter } from 'next/navigation';
 
 // --- ไอคอน SVG ---
 const ArrowLeftIcon = () => (
@@ -126,8 +126,8 @@ const mockAccounts = [
  * หน้าบันทึกรายการใหม่ (New Transaction Page)
  * /pages/transaction/new.tsx
  */
-function NewTransactionPage(): React.ReactElement {
-  // const router = useRouter(); // สำหรับแอปจริง
+function NewTransactionPage() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<TransactionType>("expense");
   const [showToast, setShowToast] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -160,7 +160,6 @@ function NewTransactionPage(): React.ReactElement {
         description,
         date,
       };
-      // (เพิ่มการตรวจสอบว่า from != to)
       if (transferFromAccount === transferToAccount) {
         alert("บัญชีต้นทางและปลายทางต้องไม่ซ้ำกัน");
         setIsSubmitting(false);
@@ -177,28 +176,16 @@ function NewTransactionPage(): React.ReactElement {
       };
     }
 
-    console.log("--- Mock Submit ---");
-    console.log(formData);
-
     // --- Mock Logic ---
     setShowToast(true);
     setTimeout(() => {
       setIsSubmitting(false);
       setShowToast(false);
-      // ในแอปจริง: ควรจะเด้งกลับไปหน้า Dashboard หรือ History
-      // router.push("/dashboard");
-      alert("(Mock) บันทึกสำเร็จ! กำลังไปที่หน้าหลัก...");
-      mockNavigate("/dashboard");
-    }, 2000); // แสดง Toast 2 วินาที
+      router.push("/transactions");
+    }, 1500); // Toast 1.5 วินาทีแล้วเด้ง
   };
 
-  /**
-   * ฟังก์ชันจำลองการนำทาง (สำหรับ Preview)
-   */
-  const mockNavigate = (path: string) => {
-    // @ts-ignore
-    window.location.href = path; // จำลองการ redirect
-  };
+  // ลบ mockNavigate
 
   /**
    * Render ฟอร์มตาม Tab ที่เลือก
@@ -373,7 +360,7 @@ function NewTransactionPage(): React.ReactElement {
       <header className="bg-white shadow-sm p-4 sticky top-0 z-10">
         <div className="max-w-md mx-auto flex items-center relative">
           <button
-            onClick={() => mockNavigate("/transactions")}
+            onClick={() => router.push("/transactions")}
             className="absolute left-0 flex items-center px-2 py-2 text-sm font-medium rounded-md text-blue-600 hover:bg-blue-100"
           >
             <ArrowLeftIcon />

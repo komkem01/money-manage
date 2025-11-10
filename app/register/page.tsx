@@ -1,7 +1,7 @@
 "use client";
 import React, { useState } from "react";
 // import Link from 'next/link'; // แก้ไข: คอมเมนต์ออกชั่วคราวสำหรับ preview
-// import { useRouter } from 'next/navigation'; // ในแอปจริง ให้ใช้ตัวนี้แทน window.location
+import { useRouter } from 'next/navigation';
 
 // --- ไอคอน SVG ---
 const UserPlusIcon = () => (
@@ -53,8 +53,8 @@ interface RegisterFormData {
  * หน้าลงทะเบียน (Register Page)
  * ใช้สำหรับให้ผู้ใช้ใหม่กรอกข้อมูลเพื่อสร้างบัญชี
  */
-function RegisterPage(): React.ReactElement {
-  // const router = useRouter(); // ในแอปจริง ให้ uncomment บรรทัดนี้
+const RegisterPage: React.FC = () => {
+  const router = useRouter();
 
   const [formData, setFormData] = useState<RegisterFormData>({
     firstName: "",
@@ -107,15 +107,7 @@ function RegisterPage(): React.ReactElement {
     setShowToast(true); // แสดง Toast
 
     setTimeout(() => {
-      // --- โค้ดสำหรับแอป Next.js จริง ---
-      // router.push('/login');
-
-      // --- โค้ดจำลองสำหรับ Preview ---
-      // @ts-ignore
-      // ใช้ window.location.href เพื่อจำลองการ "เด้ง" ไปหน้า login ใน preview นี้
-      window.location.href = "/login";
-
-      // ไม่จำเป็นต้อง setIsSubmitting(false) เพราะเราเปลี่ยนหน้าไปแล้ว
+      router.push('/login');
     }, 2000); // รอ 2 วินาทีเพื่อให้เห็น Toast
     // --- End Mock Logic ---
   };
@@ -301,8 +293,8 @@ function RegisterPage(): React.ReactElement {
               className="font-medium text-blue-600 hover:text-blue-500 cursor-pointer"
               onClick={(e) => {
                 e.preventDefault();
-                alert("ไปหน้าเข้าสู่ระบบ (Mock)");
-              }} // ป้องกันการรีเฟรชหน้าใน preview
+                router.push('/login');
+              }}
             >
               เข้าสู่ระบบที่นี่
             </a>

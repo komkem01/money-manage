@@ -1,7 +1,7 @@
 "use client"; // (ใหม่) เพิ่ม "use client"
 import React, { useState } from "react";
 // import Link from 'next/link'; // แก้ไข: คอมเมนต์ออกชั่วคราวสำหรับ preview
-// import { useRouter } from 'next/navigation'; // ในแอปจริง ให้ใช้ตัวนี้แทน window.location
+import { useRouter } from 'next/navigation';
 
 // --- ไอคอน SVG ---
 const LockIcon = () => (
@@ -43,8 +43,8 @@ const CheckCircleIcon = () => (
  * หน้าเข้าสู่ระบบ (Login Page)
  * ใช้สำหรับให้ผู้ใช้ป้อนอีเมลและรหัสผ่านเพื่อเข้าสู่ระบบ
  */
-function LoginPage(): React.ReactElement {
-  // const router = useRouter(); // ในแอปจริง ให้ uncomment บรรทัดนี้
+const LoginPage: React.FC = () => {
+  const router = useRouter();
 
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
@@ -79,12 +79,7 @@ function LoginPage(): React.ReactElement {
 
         // (ใหม่) ตั้งเวลา "เด้ง" ไปหน้า dashboard
         setTimeout(() => {
-          // --- โค้ดสำหรับแอป Next.js จริง ---
-          // router.push('/dashboard');
-
-          // --- โค้ดจำลองสำหรับ Preview ---
-          // @ts-ignore
-          window.location.href = "/dashboard"; // จำลองการไปหน้า dashboard
+          router.push('/dashboard');
         }, 2000); // รอ 2 วิให้เห็น Toast
       } else {
         setError("อีเมลหรือรหัสผ่านไม่ถูกต้อง (Mock)");
@@ -178,8 +173,8 @@ function LoginPage(): React.ReactElement {
               className="font-medium text-blue-600 hover:text-blue-500 cursor-pointer"
               onClick={(e) => {
                 e.preventDefault();
-                alert("ไปหน้าลงทะเบียน (Mock)");
-              }} // ป้องกันการรีเฟรชหน้าใน preview
+                router.push('/register');
+              }}
             >
               ลงทะเบียนที่นี่
             </a>
