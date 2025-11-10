@@ -1,8 +1,8 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 
-// --- ไอคอน SVG (คัดลอกมา) ---
+// --- ไอคอน SVG ---
 const ArrowLeftIcon = () => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
@@ -94,98 +94,128 @@ const CheckCircleIcon = () => (
     />
   </svg>
 );
+const WalletIcon = () => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    className="h-6 w-6 text-gray-700"
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+    strokeWidth={2}
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
+    />
+  </svg>
+);
 
 // --- ประเภทข้อมูล (Interfaces) ---
-type CategoryType = "expense" | "income" | "transfer";
-
-interface Category {
+interface Account {
   id: string;
   name: string;
-  type: CategoryType;
+  initialBalance: number;
 }
 
 // --- Mock Data (ข้อมูลจำลอง) ---
-const mockCategories: Category[] = [
-  { id: "c1", name: "ค่าอาหาร", type: "expense" },
-  { id: "c2", name: "ค่าเดินทาง", type: "expense" },
-  { id: "c3", name: "ค่าที่พัก", type: "expense" },
-  { id: "c4", name: "เงินเดือน", type: "income" },
-  { id: "c5", name: "รายได้เสริม", type: "income" },
-  { id: "c6", name: "โอนเข้าบัญชีออมทรัพย์", type: "transfer" },
+const mockAccounts: Account[] = [
+  { id: "acc1", name: "เงินสด", initialBalance: 5000 },
+  { id: "acc2", name: "บัญชีกสิกร", initialBalance: 10000 },
+  { id: "acc3", name: "บัญชีกรุงไทย", initialBalance: 15000 },
+  { id: "acc4", name: "วอลเล็ต (TrueMoney)", initialBalance: 1000 },
 ];
 
 /**
- * (ใหม่) หน้าจัดการหมวดหมู่ "รายรับ" (Income Categories Page)
+ * หน้าจัดการบัญชี (Accounts Page)
+ * /pages/accounts.tsx
  */
-const IncomeCategoriesPage: React.FC = () => {
+function AccountsPage() {
   const router = useRouter();
 
-  // (ใหม่) กำหนดประเภทตายตัวสำหรับหน้านี้
-  const pageType: CategoryType = "income";
-
-  const [categories, setCategories] = useState<Category[]>(mockCategories);
+  const [accounts, setAccounts] = useState<Account[]>(mockAccounts);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
-  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [showToast, setShowToast] = useState<string>("");
-  const [deleteCategoryId, setDeleteCategoryId] = useState<string | null>(null);
+  const [deleteAccountId, setDeleteAccountId] = useState<string | null>(null);
 
-  // กรองหมวดหมู่ตามประเภทของหน้านี้ (income)
-  const filteredCategories = categories.filter((c) => c.type === pageType);
-
+  /**
+   * เปิด Modal สำหรับ "เพิ่ม" บัญชีใหม่
+   */
   const handleOpenAddModal = () => {
-    setEditingCategory(null);
+    setEditingAccount(null);
     setIsModalOpen(true);
   };
 
-  const handleOpenEditModal = (category: Category) => {
-    setEditingCategory(category);
+  /**
+   * เปิด Modal สำหรับ "แก้ไข" บัญชี
+   */
+  const handleOpenEditModal = (account: Account) => {
+    setEditingAccount(account);
     setIsModalOpen(true);
   };
 
-  // เปิด Modal แจ้งเตือนลบ
-  const handleRequestDeleteCategory = (id: string) => {
-    setDeleteCategoryId(id);
+  /**
+   * เปิด Modal แจ้งเตือนลบ
+   */
+  const handleRequestDeleteAccount = (id: string) => {
+    setDeleteAccountId(id);
   };
 
-  // ดำเนินการลบจริง
-  const handleDeleteCategory = () => {
-    if (deleteCategoryId) {
-      setCategories((prev) => prev.filter((c) => c.id !== deleteCategoryId));
-      setDeleteCategoryId(null);
-      showToastMessage("ลบหมวดหมู่สำเร็จ!");
+  /**
+   * ดำเนินการลบจริง
+   */
+  const handleDeleteAccount = () => {
+    if (deleteAccountId) {
+      setAccounts((prev) => prev.filter((acc) => acc.id !== deleteAccountId));
+      setDeleteAccountId(null);
+      showToastMessage("ลบบัญชีสำเร็จ!");
     }
   };
 
-  const handleSaveCategory = (formData: {
+  /**
+   * (Mock) จัดการการบันทึก (ทั้งเพิ่มและแก้ไข)
+   */
+  const handleSaveAccount = (formData: {
     id: string | null;
     name: string;
+    initialBalance: number;
   }) => {
     if (formData.id) {
-      setCategories((prev) =>
-        prev.map((c) =>
-          c.id === formData.id
-            ? { ...c, name: formData.name, type: pageType }
-            : c
+      // Logic แก้ไข (Mock)
+      setAccounts((prev) =>
+        prev.map((acc) =>
+          acc.id === formData.id
+            ? {
+                ...acc,
+                name: formData.name,
+                initialBalance: formData.initialBalance,
+              }
+            : acc
         )
       );
-      showToastMessage("แก้ไขหมวดหมู่สำเร็จ!");
+      showToastMessage("แก้ไขบัญชีสำเร็จ!");
     } else {
-      const newCategory: Category = {
-        id: `c${Math.random()}`,
+      // Logic เพิ่มใหม่ (Mock)
+      const newAccount: Account = {
+        id: `acc${Math.random()}`, // สร้าง ID จำลอง
         name: formData.name,
-        type: pageType,
+        initialBalance: formData.initialBalance,
       };
-      setCategories((prev) => [...prev, newCategory]);
-      showToastMessage("เพิ่มหมวดหมู่สำเร็จ!");
+      setAccounts((prev) => [...prev, newAccount]);
+      showToastMessage("เพิ่มบัญชีสำเร็จ!");
     }
     setIsModalOpen(false);
   };
 
+  /**
+   * ฟังก์ชันแสดง Toast
+   */
   const showToastMessage = (message: string) => {
     setShowToast(message);
     setTimeout(() => {
       setShowToast("");
-    }, 3000);
+    }, 3000); // แสดง Toast 3 วินาที
   };
 
   // ลบ mockNavigate
@@ -195,15 +225,13 @@ const IncomeCategoriesPage: React.FC = () => {
       {/* --- Header --- */}
       <header className="bg-white shadow-sm p-4">
         <div className="max-w-4xl mx-auto flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-gray-800">
-            จัดการหมวดหมู่รายรับ
-          </h1>
+          <h1 className="text-2xl font-bold text-gray-800">จัดการบัญชี</h1>
           <button
-            onClick={() => router.push("/type")}
+            onClick={() => router.push("/dashboard")}
             className="flex items-center px-3 py-2 text-sm font-medium rounded-md text-blue-600 bg-blue-100 hover:bg-blue-200"
           >
             <ArrowLeftIcon />
-            กลับหน้าประเภท
+            กลับหน้าหลัก
           </button>
         </div>
       </header>
@@ -213,46 +241,56 @@ const IncomeCategoriesPage: React.FC = () => {
         <div className="bg-white p-6 rounded-lg shadow-lg">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-semibold text-gray-700">
-              หมวดหมู่รายรับทั้งหมด
+              บัญชีทั้งหมด
             </h2>
             <button
               onClick={handleOpenAddModal}
               className="flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
             >
               <PlusIcon />
-              เพิ่มหมวดหมู่ใหม่
+              เพิ่มบัญชีใหม่
             </button>
           </div>
 
-          {/* --- รายการหมวดหมู่ (List) --- */}
+          {/* --- 3. รายการบัญชี (List) --- */}
           <div className="flow-root">
-            {filteredCategories.length > 0 ? (
+            {accounts.length > 0 ? (
               <ul role="list" className="divide-y divide-gray-200">
-                {filteredCategories.map((category) => (
+                {accounts.map((account) => (
                   <li
-                    key={category.id}
+                    key={account.id}
                     className="py-4 flex justify-between items-center"
                   >
-                    <p className="text-md font-medium text-gray-900 truncate">
-                      {category.name}
-                    </p>
+                    <div className="flex items-center space-x-3">
+                      <WalletIcon />
+                      <div>
+                        <p className="text-md font-medium text-gray-900 truncate">
+                          {account.name}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          ยอดเริ่มต้น:{" "}
+                          {account.initialBalance.toLocaleString("th-TH")} ฿
+                        </p>
+                      </div>
+                    </div>
+                    {/* ปุ่ม แก้ไข / ลบ */}
                     <div className="space-x-3">
                       <button
-                        onClick={() => handleOpenEditModal(category)}
-                        className="p-2 rounded-md text-blue-600 bg-white hover:bg-gray-100 border border-blue-200"
+                        onClick={() => handleOpenEditModal(account)}
+                        className="p-2 rounded-md text-blue-600 bg-blue-100 hover:bg-blue-200"
                         title="แก้ไข"
                       >
                         <EditIcon />
                       </button>
                       <button
-                        onClick={() => handleRequestDeleteCategory(category.id)}
-                        className="p-2 rounded-md text-red-600 bg-white hover:bg-gray-100 border border-red-200"
+                        onClick={() => handleRequestDeleteAccount(account.id)}
+                        className="p-2 rounded-md text-red-600 bg-red-100 hover:bg-red-200"
                         title="ลบ"
                       >
                         <DeleteIcon />
                       </button>
-                      {/* --- Modal แจ้งเตือนก่อนลบหมวดหมู่ --- */}
-                      {deleteCategoryId && (
+                      {/* --- Modal แจ้งเตือนก่อนลบบัญชี --- */}
+                      {deleteAccountId && (
                         <div className="fixed inset-0 z-50 flex items-center justify-center bg-white bg-opacity-80 backdrop-blur-sm">
                           <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm mx-4">
                             <div className="flex flex-col items-center text-center">
@@ -261,20 +299,20 @@ const IncomeCategoriesPage: React.FC = () => {
                                 ยืนยันการลบ
                               </h3>
                               <p className="text-gray-600 mt-2">
-                                คุณแน่ใจหรือไม่ว่าต้องการลบหมวดหมู่นี้?
+                                คุณแน่ใจหรือไม่ว่าต้องการลบบัญชีนี้?
                                 <br />
                                 การกระทำนี้ไม่สามารถยกเลิกได้
                               </p>
                             </div>
                             <div className="flex justify-center gap-4 mt-6">
                               <button
-                                onClick={() => setDeleteCategoryId(null)}
+                                onClick={() => setDeleteAccountId(null)}
                                 className="w-full px-4 py-2 font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
                               >
                                 ยกเลิก
                               </button>
                               <button
-                                onClick={handleDeleteCategory}
+                                onClick={handleDeleteAccount}
                                 className="w-full px-4 py-2 font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
                               >
                                 ยืนยันการลบ
@@ -288,23 +326,23 @@ const IncomeCategoriesPage: React.FC = () => {
                 ))}
               </ul>
             ) : (
-              <p className="text-center text-gray-500 py-8">
-                ไม่พบหมวดหมู่สำหรับประเภทนี้
-              </p>
+              // กรณีไม่พบข้อมูล
+              <p className="text-center text-gray-500 py-8">ไม่พบบัญชี</p>
             )}
           </div>
         </div>
       </main>
 
+      {/* --- 4. Modal (หน้าต่างเด้ง) สำหรับ เพิ่ม/แก้ไข --- */}
       {isModalOpen && (
-        <CategoryModal
-          category={editingCategory}
+        <AccountModal
+          account={editingAccount}
           onClose={() => setIsModalOpen(false)}
-          onSave={handleSaveCategory}
-          defaultType={pageType}
+          onSave={handleSaveAccount}
         />
       )}
 
+      {/* --- 5. Toast Notification --- */}
       {showToast && (
         <div className="fixed bottom-5 right-5 z-50 bg-green-600 text-white px-6 py-4 rounded-lg shadow-lg flex items-center">
           <CheckCircleIcon />
@@ -313,44 +351,53 @@ const IncomeCategoriesPage: React.FC = () => {
       )}
     </div>
   );
-};
-
-// --- Component ย่อยสำหรับ Modal (ใช้โค้ดเดิม) ---
-interface CategoryModalProps {
-  category: Category | null;
-  onClose: () => void;
-  onSave: (formData: { id: string | null; name: string }) => void;
-  defaultType: CategoryType;
 }
 
-const CategoryModal: React.FC<CategoryModalProps> = ({
-  category,
+// --- Component ย่อยสำหรับ Modal ---
+interface AccountModalProps {
+  account: Account | null; // null = เพิ่มใหม่, Object = แก้ไข
+  onClose: () => void;
+  onSave: (formData: {
+    id: string | null;
+    name: string;
+    initialBalance: number;
+  }) => void;
+}
+
+const AccountModal: React.FC<AccountModalProps> = ({
+  account,
   onClose,
   onSave,
-  defaultType,
 }) => {
-  const [name, setName] = useState<string>(category?.name || "");
+  const [name, setName] = useState<string>(account?.name || "");
+  const [initialBalance, setInitialBalance] = useState<number>(
+    account?.initialBalance || 0
+  );
   const [error, setError] = useState<string>("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
-      setError("กรุณากรอกชื่อหมวดหมู่");
+      setError("กรุณากรอกชื่อบัญชี");
       return;
     }
-    onSave({ id: category?.id || null, name: name });
+    onSave({
+      id: account?.id || null, // ส่ง id (ถ้ามี)
+      name: name,
+      initialBalance: initialBalance,
+    });
   };
 
   return (
-    <div className="fixed inset-0 z-40 bg-white bg-opacity-80 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-white bg-opacity-80 backdrop-blur-sm">
       <div
         className="relative bg-white w-full max-w-lg rounded-lg shadow-xl p-6"
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()} // ป้องกันการปิด Modal เมื่อคลิกข้างใน
       >
+        {/* --- Header Modal --- */}
         <div className="flex justify-between items-center mb-5">
           <h3 className="text-xl font-bold text-gray-800">
-            {category ? "แก้ไขหมวดหมู่" : "เพิ่มหมวดหมู่ใหม่"} (
-            {defaultType === "income" ? "รายรับ" : ""})
+            {account ? "แก้ไขบัญชี" : "เพิ่มบัญชีใหม่"}
           </h3>
           <button
             onClick={onClose}
@@ -360,27 +407,53 @@ const CategoryModal: React.FC<CategoryModalProps> = ({
           </button>
         </div>
 
+        {/* --- Form ใน Modal --- */}
         <form onSubmit={handleSubmit} className="space-y-5">
+          {/* ช่องกรอกชื่อ */}
           <div>
             <label
-              htmlFor="categoryName"
+              htmlFor="accountName"
               className="block text-sm font-medium text-gray-700 mb-1"
             >
-              ชื่อหมวดหมู่ <span className="text-red-500">*</span>
+              ชื่อบัญชี <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
-              id="categoryName"
+              id="accountName"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
               className="w-full px-4 py-3 border border-gray-300 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="เช่น เงินเดือน, รายได้เสริม"
+              placeholder="เช่น กสิกร, เงินสด, วอลเล็ต"
             />
           </div>
 
+          {/* ช่องกรอกยอดเงินเริ่มต้น */}
+          <div>
+            <label
+              htmlFor="initialBalance"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              ยอดเงินเริ่มต้น (หรือปัจจุบัน)
+            </label>
+            <input
+              type="number"
+              id="initialBalance"
+              value={initialBalance}
+              onChange={(e) =>
+                setInitialBalance(parseFloat(e.target.value) || 0)
+              }
+              required
+              className="w-full px-4 py-3 border border-gray-300 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="0.00"
+              step="0.01"
+            />
+          </div>
+
+          {/* แสดง Error (ถ้ามี) */}
           {error && <p className="text-sm text-red-600">{error}</p>}
 
+          {/* --- Footer Modal (ปุ่ม) --- */}
           <div className="flex justify-end space-x-3 pt-4">
             <button
               type="button"
@@ -402,4 +475,4 @@ const CategoryModal: React.FC<CategoryModalProps> = ({
   );
 };
 
-export default IncomeCategoriesPage;
+export default AccountsPage;

@@ -126,12 +126,10 @@ const ExpenseCategoriesPage: React.FC = () => {
 
   // State สำหรับเก็บรายการหมวดหมู่ทั้งหมด (Mock)
   const [categories, setCategories] = useState<Category[]>(mockCategories);
-  // State สำหรับควบคุมการเปิด/ปิด Modal
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
-  // State สำหรับเก็บข้อมูลหมวดหมู่ที่กำลังจะแก้ไข (ถ้าเป็น null = เพิ่มใหม่)
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
-  // State สำหรับ Toast
   const [showToast, setShowToast] = useState<string>("");
+  const [deleteCategoryId, setDeleteCategoryId] = useState<string | null>(null);
 
   // (แก้ไข) กรองหมวดหมู่ตามประเภทของหน้านี้ (expense)
   const filteredCategories = categories.filter((c) => c.type === pageType);
@@ -152,13 +150,16 @@ const ExpenseCategoriesPage: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  /**
-   * (Mock) จัดการการลบหมวดหมู่
-   */
-  const handleDeleteCategory = (id: string) => {
-    // @ts-ignore
-    if (confirm("คุณแน่ใจหรือไม่ว่าต้องการลบหมวดหมู่นี้?\n(Mock Delete)")) {
-      setCategories((prev) => prev.filter((c) => c.id !== id));
+  // เปิด Modal แจ้งเตือนลบ
+  const handleRequestDeleteCategory = (id: string) => {
+    setDeleteCategoryId(id);
+  };
+
+  // ดำเนินการลบจริง
+  const handleDeleteCategory = () => {
+    if (deleteCategoryId) {
+      setCategories((prev) => prev.filter((c) => c.id !== deleteCategoryId));
+      setDeleteCategoryId(null);
       showToastMessage("ลบหมวดหมู่สำเร็จ!");
     }
   };
@@ -265,18 +266,44 @@ const ExpenseCategoriesPage: React.FC = () => {
                     <div className="space-x-3">
                       <button
                         onClick={() => handleOpenEditModal(category)}
-                        className="p-2 rounded-md text-blue-600 bg-blue-100 hover:bg-blue-200"
+                        className="p-2 rounded-md text-blue-600 bg-white hover:bg-gray-100 border border-blue-200"
                         title="แก้ไข"
                       >
                         <EditIcon />
                       </button>
                       <button
-                        onClick={() => handleDeleteCategory(category.id)}
-                        className="p-2 rounded-md text-red-600 bg-red-100 hover:bg-red-200"
+                        onClick={() => handleRequestDeleteCategory(category.id)}
+                        className="p-2 rounded-md text-red-600 bg-white hover:bg-gray-100 border border-red-200"
                         title="ลบ"
                       >
                         <DeleteIcon />
                       </button>
+      {/* --- Modal แจ้งเตือนก่อนลบหมวดหมู่ --- */}
+      {deleteCategoryId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white bg-opacity-80 backdrop-blur-sm">
+          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm mx-4">
+            <div className="flex flex-col items-center text-center">
+              <DeleteIcon />
+              <h3 className="text-xl font-bold text-gray-800 mt-4">ยืนยันการลบ</h3>
+              <p className="text-gray-600 mt-2">คุณแน่ใจหรือไม่ว่าต้องการลบหมวดหมู่นี้?<br/>การกระทำนี้ไม่สามารถยกเลิกได้</p>
+            </div>
+            <div className="flex justify-center gap-4 mt-6">
+              <button
+                onClick={() => setDeleteCategoryId(null)}
+                className="w-full px-4 py-2 font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={handleDeleteCategory}
+                className="w-full px-4 py-2 font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
+              >
+                ยืนยันการลบ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
                     </div>
                   </li>
                 ))}
@@ -345,7 +372,7 @@ const CategoryModal: React.FC<CategoryModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-40 bg-black bg-opacity-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-40 bg-white bg-opacity-80 flex items-center justify-center p-4">
       <div
         className="relative bg-white w-full max-w-lg rounded-lg shadow-xl p-6"
         onClick={(e) => e.stopPropagation()}
