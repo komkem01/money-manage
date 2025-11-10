@@ -120,6 +120,24 @@ const CheckCircleIcon = () => (
   </svg>
 );
 
+// (ใหม่) เพิ่ม WalletIcon
+const WalletIcon = () => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    className="h-6 w-6 mr-2"
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+    strokeWidth={2}
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
+    />
+  </svg>
+);
+
 // --- Mock Data (ข้อมูลจำลอง) ---
 interface Transaction {
   id: string;
@@ -160,13 +178,6 @@ const mockData = {
       id: "4",
       description: "ซื้อของเข้าบ้าน",
       amount: 3000.0,
-      type: "expense",
-      date: "2025-11-07",
-    },
-    {
-      id: "5",
-      description: "ซื้อของ",
-      amount: 300.0,
       type: "expense",
       date: "2025-11-07",
     },
@@ -221,7 +232,7 @@ function DashboardPage() {
           <div className="flex justify-between items-center h-16">
             {/* Logo หรือ ชื่อแอป */}
             <div className="flex-shrink-0">
-              <h1 className="text-2xl font-bold text-blue-600">Money Manage</h1>
+              <h1 className="text-2xl font-bold text-blue-600">MyExpenses</h1>
             </div>
 
             {/* ชื่อผู้ใช้และปุ่มออกจากระบบ */}
@@ -300,7 +311,8 @@ function DashboardPage() {
         {/* --- 2. เมนูลัด (Quick Actions) --- */}
         <section className="bg-white p-6 rounded-lg shadow-lg mb-8">
           <h2 className="text-xl font-semibold text-gray-800 mb-5">เมนูลัด</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* (แก้ไข) ปรับ grid layout ให้รองรับ 4 ปุ่ม */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* ปุ่ม: บันทึกรายรับ/รายจ่าย */}
             <button
               onClick={() => router.push("/transactions/new")}
@@ -308,6 +320,15 @@ function DashboardPage() {
             >
               <PlusCircleIcon />
               <span>บันทึกรายรับ/รายจ่าย</span>
+            </button>
+
+            {/* (ใหม่) ปุ่ม: จัดการบัญชี */}
+            <button
+              onClick={() => router.push("/accounts")}
+              className="flex items-center justify-center p-4 bg-yellow-500 text-white font-medium rounded-lg shadow-md hover:bg-yellow-600 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-opacity-50 transition duration-300"
+            >
+              <WalletIcon />
+              <span>จัดการบัญชี</span>
             </button>
 
             {/* ปุ่ม: จัดการหมวดหมู่ */}
