@@ -133,6 +133,19 @@ const handler = async (req, res) => {
         const { amount, description, date, transaction_date, account_id, category_id, related_account_id } = req.body;
         const transactionDate = date || transaction_date;
 
+        console.log('PATCH transaction request:', { 
+          transactionId,
+          amount, 
+          description, 
+          date, 
+          transaction_date, 
+          transactionDate,
+          account_id, 
+          category_id, 
+          related_account_id,
+          body: req.body
+        });
+
         await client.query('BEGIN');
 
         try {
@@ -167,7 +180,7 @@ const handler = async (req, res) => {
           let newTypeName = oldTypeName;
 
           // Validation
-          if (amount !== undefined && amount <= 0) {
+          if (amount !== undefined && (isNaN(parseFloat(amount)) || parseFloat(amount) <= 0)) {
             await client.query('ROLLBACK');
             return res.status(400).json({
               success: false,
@@ -481,6 +494,7 @@ const handler = async (req, res) => {
             }
           });
         } catch (error) {
+          console.error('PATCH transaction error:', error);
           await client.query('ROLLBACK');
           throw error;
         }
@@ -565,11 +579,13 @@ const handler = async (req, res) => {
       });
     } catch (error) {
       console.error('Transaction [id] API error:', error);
+      console.error('Error stack:', error.stack);
       return res.status(500).json({ 
         success: false,
         error: 'INTERNAL_SERVER_ERROR', 
         message: '❌ เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่อีกครั้ง',
-        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
       });
     } finally {
       await client.end();
