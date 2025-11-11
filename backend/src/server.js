@@ -1,116 +1,106 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 
-const config = require('./config');
-const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
-
-// Import Routes
-const authRoutes = require('./routes/auth');
-const userRoutes = require('./routes/users');
-const accountRoutes = require('./routes/accounts');
-const categoryRoutes = require('./routes/categories');
-const transactionRoutes = require('./routes/transactions');
-const dashboardRoutes = require('./routes/dashboard');
-
 const app = express();
+const PORT = process.env.PORT || 5000;
 
-// ================================
-// Middleware Configuration
-// ================================
-
-// Security Middleware
+// --- Security & Rate Limiting ---
 app.use(helmet());
 
-// CORS Configuration
-app.use(cors(config.cors));
-
-// Rate Limiting
 const limiter = rateLimit({
-  windowMs: config.rateLimit.windowMs,
-  max: config.rateLimit.maxRequests,
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
   message: {
-    success: false,
-    message: 'Too many requests from this IP, please try again later.',
+    error: 'Too many requests from this IP, please try again later.',
   },
-  standardHeaders: true,
-  legacyHeaders: false,
 });
 app.use(limiter);
 
-// Body Parser Middleware
+// --- CORS ---
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3001', 
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:3001',
+  'http://192.168.1.44:3000',
+  'http://192.168.1.44:3001',
+  process.env.CORS_ORIGIN
+].filter(Boolean);
+
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (mobile apps, curl, postman)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    } else {
+      console.log('CORS blocked origin:', origin);
+      return callback(null, false);
+    }
+  },
+  credentials: true,
+}));
+
+// --- Logging ---
+if (process.env.NODE_ENV !== 'production') {
+  app.use(morgan('dev'));
+}
+
+// --- Body Parsing ---
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Logging Middleware
-app.use(morgan(config.nodeEnv === 'development' ? 'dev' : 'combined'));
-
-// ================================
-// Routes Configuration
-// ================================
-
-// Health Check Route
+// --- Health Check ---
 app.get('/health', (req, res) => {
   res.json({
-    success: true,
-    message: 'Money Management API is running!',
+    status: 'OK',
     timestamp: new Date().toISOString(),
-    environment: config.nodeEnv,
+    environment: process.env.NODE_ENV || 'development',
   });
 });
 
-// API Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/accounts', accountRoutes);
-app.use('/api/categories', categoryRoutes);
-app.use('/api/transactions', transactionRoutes);
-app.use('/api/dashboard', dashboardRoutes);
+// --- API Routes ---
+app.use('/api/auth', require('./routes/auth'));
 
-// ================================
-// Error Handling
-// ================================
+// --- 404 Handler ---
+app.use('*', (req, res) => {
+  res.status(404).json({
+    error: 'Route not found',
+    message: `Cannot ${req.method} ${req.originalUrl}`,
+  });
+});
 
-// 404 Handler
-app.use(notFoundHandler);
+// --- Global Error Handler ---
+app.use((error, req, res, next) => {
+  console.error('Global Error Handler:', error);
+  
+  const statusCode = error.statusCode || 500;
+  const message = error.message || 'Internal Server Error';
+  
+  res.status(statusCode).json({
+    error: message,
+    ...(process.env.NODE_ENV !== 'production' && { stack: error.stack }),
+  });
+});
 
-// Global Error Handler
-app.use(errorHandler);
-
-// ================================
-// Server Startup
-// ================================
-
-const PORT = config.port;
-
-const server = app.listen(PORT, () => {
+// --- Start Server ---
+app.listen(PORT, '0.0.0.0', () => {
   console.log('🚀 Money Management API Server Started!');
   console.log('=====================================');
   console.log(`📡 Port: ${PORT}`);
-  console.log(`🌍 Environment: ${config.nodeEnv}`);
-  console.log(`🔒 CORS Origin: ${config.cors.origin}`);
+  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🔒 CORS Origin: ${process.env.CORS_ORIGIN || 'http://localhost:3000'}`);
   console.log(`💾 Database: PostgreSQL (via Prisma)`);
   console.log('=====================================');
-  console.log(`🔗 Health Check: http://localhost:${PORT}/health`);
-  console.log(`📋 API Base URL: http://localhost:${PORT}/api`);
+  console.log(`🔗 Local: http://localhost:${PORT}/health`);
+  console.log(`� Network: http://192.168.1.44:${PORT}/health`);
+  console.log(`📋 API Base URL: http://192.168.1.44:${PORT}/api`);
   console.log('=====================================');
-});
-
-// Graceful Shutdown
-process.on('SIGTERM', () => {
-  console.log('SIGTERM received. Shutting down gracefully...');
-  server.close(() => {
-    console.log('Process terminated');
-  });
-});
-
-process.on('SIGINT', () => {
-  console.log('SIGINT received. Shutting down gracefully...');
-  server.close(() => {
-    console.log('Process terminated');
-  });
 });
 
 module.exports = app;

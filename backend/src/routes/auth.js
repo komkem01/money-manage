@@ -1,199 +1,179 @@
 const express = require('express');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
-
-const config = require('../config');
-const prisma = require('../config/database');
+const { 
+  register, 
+  login, 
+  logout, 
+  getProfile, 
+  updateProfile, 
+  changePassword 
+} = require('../controllers/authController');
 const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
 
 /**
+ * Middleware สำหรับตรวจสอบ validation errors
+ */
+const handleValidationErrors = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      error: 'Validation failed',
+      message: 'Please check your input data.',
+      details: errors.array().map(error => ({
+        field: error.path,
+        message: error.msg,
+        value: error.value,
+      })),
+    });
+  }
+  next();
+};
+
+/**
  * POST /api/auth/register
- * ลงทะเบียนผู้ใช้ใหม่
+ * สมัครสมาชิกใหม่
  */
 router.post('/register', [
+  // Validation rules
   body('email')
     .isEmail()
     .normalizeEmail()
     .withMessage('Please provide a valid email address'),
+  
   body('password')
     .isLength({ min: 6 })
     .withMessage('Password must be at least 6 characters long'),
-  body('firstName')
+  
+  body('firstname')
     .optional()
     .trim()
-    .isLength({ min: 1 })
-    .withMessage('First name cannot be empty'),
-  body('lastName')
+    .isLength({ min: 1, max: 255 })
+    .withMessage('First name must be between 1 and 255 characters'),
+  
+  body('lastname')
     .optional()
     .trim()
-    .isLength({ min: 1 })
-    .withMessage('Last name cannot be empty'),
-], async (req, res, next) => {
-  try {
-    // ตรวจสอบ validation errors
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Validation failed',
-        errors: errors.array(),
-      });
-    }
-
-    const { email, password, firstName, lastName, username } = req.body;
-
-    // ตรวจสอบว่าอีเมลมีอยู่แล้วหรือไม่
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
-    });
-
-    if (existingUser) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email is already registered',
-      });
-    }
-
-    // เข้ารหัสรหัสผ่าน
-    const hashedPassword = await bcrypt.hash(password, config.security.bcryptRounds);
-
-    // สร้างผู้ใช้ใหม่
-    const user = await prisma.user.create({
-      data: {
-        email,
-        password: hashedPassword,
-        firstName: firstName || null,
-        lastName: lastName || null,
-        username: username || null,
-      },
-      select: {
-        id: true,
-        email: true,
-        username: true,
-        firstName: true,
-        lastName: true,
-        createdAt: true,
-      },
-    });
-
-    // สร้าง JWT token
-    const token = jwt.sign(
-      { userId: user.id, email: user.email },
-      config.jwt.secret,
-      { expiresIn: config.jwt.expiresIn }
-    );
-
-    res.status(201).json({
-      success: true,
-      message: 'User registered successfully',
-      data: {
-        user,
-        token,
-      },
-    });
-  } catch (error) {
-    next(error);
-  }
-});
+    .isLength({ min: 1, max: 255 })
+    .withMessage('Last name must be between 1 and 255 characters'),
+  
+  body('displayname')
+    .optional()
+    .trim()
+    .isLength({ min: 1, max: 255 })
+    .withMessage('Display name must be between 1 and 255 characters'),
+  
+  body('phone')
+    .optional()
+    .trim()
+    .matches(/^[0-9+\-\s()]{10,15}$/)
+    .withMessage('Phone number must be valid (10-15 digits)'),
+], handleValidationErrors, register);
 
 /**
  * POST /api/auth/login
  * เข้าสู่ระบบ
  */
 router.post('/login', [
+  // Validation rules
   body('email')
     .isEmail()
     .normalizeEmail()
     .withMessage('Please provide a valid email address'),
+  
   body('password')
     .notEmpty()
     .withMessage('Password is required'),
-], async (req, res, next) => {
-  try {
-    // ตรวจสอบ validation errors
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Validation failed',
-        errors: errors.array(),
-      });
-    }
-
-    const { email, password } = req.body;
-
-    // ค้นหาผู้ใช้
-    const user = await prisma.user.findUnique({
-      where: { email },
-    });
-
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid email or password',
-      });
-    }
-
-    // ตรวจสอบรหัสผ่าน
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid email or password',
-      });
-    }
-
-    // สร้าง JWT token
-    const token = jwt.sign(
-      { userId: user.id, email: user.email },
-      config.jwt.secret,
-      { expiresIn: config.jwt.expiresIn }
-    );
-
-    // ส่งข้อมูลผู้ใช้ (ไม่ส่งรหัสผ่าน)
-    const { password: _, ...userWithoutPassword } = user;
-
-    res.json({
-      success: true,
-      message: 'Login successful',
-      data: {
-        user: userWithoutPassword,
-        token,
-      },
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-/**
- * GET /api/auth/me
- * ดูข้อมูลผู้ใช้ปัจจุบัน
- */
-router.get('/me', authenticateToken, async (req, res, next) => {
-  try {
-    res.json({
-      success: true,
-      data: {
-        user: req.user,
-      },
-    });
-  } catch (error) {
-    next(error);
-  }
-});
+], handleValidationErrors, login);
 
 /**
  * POST /api/auth/logout
- * ออกจากระบบ (ในฝั่ง client จะลบ token)
+ * ออกจากระบบ
  */
-router.post('/logout', authenticateToken, async (req, res) => {
+router.post('/logout', logout);
+
+/**
+ * GET /api/auth/profile
+ * ดูข้อมูล profile ของตัวเอง (ต้องมี token)
+ */
+router.get('/profile', authenticateToken, getProfile);
+
+/**
+ * PUT /api/auth/profile
+ * อัปเดตข้อมูล profile (ต้องมี token)
+ */
+router.put('/profile', [
+  authenticateToken,
+  // Validation rules
+  body('firstname')
+    .optional()
+    .trim()
+    .isLength({ min: 1, max: 255 })
+    .withMessage('First name must be between 1 and 255 characters'),
+  
+  body('lastname')
+    .optional()
+    .trim()
+    .isLength({ min: 1, max: 255 })
+    .withMessage('Last name must be between 1 and 255 characters'),
+  
+  body('displayname')
+    .optional()
+    .trim()
+    .isLength({ min: 1, max: 255 })
+    .withMessage('Display name must be between 1 and 255 characters'),
+  
+  body('phone')
+    .optional()
+    .trim()
+    .matches(/^[0-9+\-\s()]{10,15}$/)
+    .withMessage('Phone number must be valid (10-15 digits)'),
+], handleValidationErrors, updateProfile);
+
+/**
+ * POST /api/auth/change-password
+ * เปลี่ยนรหัสผ่าน (ต้องมี token)
+ */
+router.post('/change-password', [
+  authenticateToken,
+  // Validation rules
+  body('currentPassword')
+    .notEmpty()
+    .withMessage('Current password is required'),
+  
+  body('newPassword')
+    .isLength({ min: 6 })
+    .withMessage('New password must be at least 6 characters long'),
+  
+  body('confirmPassword')
+    .custom((value, { req }) => {
+      if (value !== req.body.newPassword) {
+        throw new Error('Password confirmation does not match new password');
+      }
+      return true;
+    }),
+], handleValidationErrors, changePassword);
+
+/**
+ * GET /api/auth/me
+ * Alias for /profile (บางครั้งใช้ /me สะดวกกว่า)
+ */
+router.get('/me', authenticateToken, getProfile);
+
+/**
+ * POST /api/auth/verify-token
+ * ตรวจสอบว่า token ยังใช้ได้หรือไม่
+ */
+router.post('/verify-token', authenticateToken, (req, res) => {
+  // ถ้าผ่าน authenticateToken middleware ได้แสดงว่า token ถูกต้อง
   res.json({
     success: true,
-    message: 'Logout successful',
+    message: 'Token is valid',
+    data: {
+      user: req.user,
+      tokenData: req.tokenData,
+    },
   });
 });
 
