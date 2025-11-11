@@ -1,6 +1,10 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { useRouter } from 'next/navigation';
+import { getUserData, removeAuthToken, removeUserData, getAuthToken } from '@/lib/auth';
+import { getAllAccounts, Account } from '@/lib/accounts';
+import { getAllTransactions } from '@/lib/transactions';
+import AuthGuard from '@/components/AuthGuard';
 
 // --- ไอคอน SVG ---
 const LogOutIcon = () => (
@@ -138,52 +142,32 @@ const WalletIcon = () => (
   </svg>
 );
 
-// --- Mock Data (ข้อมูลจำลอง) ---
-interface Transaction {
+// --- Interface Definitions ---
+interface DashboardData {
+  userName: string;
+  totalBalance: number;
+  totalIncome: number;
+  totalExpense: number;
+  recentTransactions: any[];
+  accounts: Account[];
+}
+
+interface DashboardTransaction {
   id: string;
   description: string;
   amount: number;
-  type: "income" | "expense";
+  type: "income" | "expense" | "transfer";
   date: string;
+  account?: {
+    name: string;
+  };
+  category?: {
+    name: string;
+    type?: {
+      name: string;
+    };
+  };
 }
-
-const mockData = {
-  userName: "สมชาย",
-  balance: 15000.0,
-  totalIncome: 50000.0,
-  totalExpense: 35000.0,
-  recentTransactions: [
-    {
-      id: "1",
-      description: "เงินเดือน",
-      amount: 50000.0,
-      type: "income",
-      date: "2025-11-01",
-    },
-    {
-      id: "2",
-      description: "ค่าเช่าบ้าน",
-      amount: 15000.0,
-      type: "expense",
-      date: "2025-11-05",
-    },
-    {
-      id: "3",
-      description: "ค่าไฟ",
-      amount: 2500.0,
-      type: "expense",
-      date: "2025-11-06",
-    },
-    {
-      id: "4",
-      description: "ซื้อของเข้าบ้าน",
-      amount: 3000.0,
-      type: "expense",
-      date: "2025-11-07",
-    },
-  ] as Transaction[],
-};
-// ------------------------------
 
 /**
  * หน้าหลัก (Dashboard)
@@ -191,14 +175,143 @@ const mockData = {
  */
 function DashboardPage() {
   const router = useRouter();
-  const [data, setData] = useState(mockData);
+  const [data, setData] = useState<DashboardData>({
+    userName: "",
+    totalBalance: 0,
+    totalIncome: 0,
+    totalExpense: 0,
+    recentTransactions: [],
+    accounts: []
+  });
   const [showLogoutToast, setShowLogoutToast] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>('');
 
-  // จำลองการโหลดข้อมูล
+  /**
+   * โหลดข้อมูล Dashboard จาก API
+   */
+  const loadDashboardData = async (userData: any) => {
+    try {
+      setLoading(true);
+      setError('');
+
+      console.log('Loading dashboard data...');
+
+      // โหลดข้อมูลบัญชีทั้งหมด
+      const accountsResponse = await getAllAccounts();
+      console.log('Accounts response:', accountsResponse);
+
+      let accounts: Account[] = [];
+      let totalBalance = 0;
+
+      if (accountsResponse.success && accountsResponse.data) {
+        accounts = accountsResponse.data;
+        totalBalance = accounts.reduce((sum, account) => sum + parseFloat(account.balance || '0'), 0);
+      }
+
+      // โหลดธุรกรรมล่าสุด (30 รายการ)
+      const transactionsResponse = await getAllTransactions(1, 30);
+      console.log('Transactions response:', transactionsResponse);
+
+      let recentTransactions: DashboardTransaction[] = [];
+      let totalIncome = 0;
+      let totalExpense = 0;
+
+      if (transactionsResponse.success && transactionsResponse.data) {
+        const currentMonth = new Date().getMonth();
+        const currentYear = new Date().getFullYear();
+
+        // แปลงข้อมูลธุรกรรมและคำนวณสถิติ
+        recentTransactions = transactionsResponse.data.slice(0, 3).map((tx: any) => {
+          const txDate = new Date(parseInt(tx.date));
+          const amount = parseFloat(tx.amount);
+          
+          // คำนวณรายรับ/รายจ่ายเฉพาะเดือนปัจจุบัน
+          if (txDate.getMonth() === currentMonth && txDate.getFullYear() === currentYear) {
+            if (tx.category?.type?.name === 'Income') {
+              totalIncome += amount;
+            } else if (tx.category?.type?.name === 'Expense') {
+              totalExpense += amount;
+            }
+          }
+
+          return {
+            id: tx.id,
+            description: tx.description || tx.category?.name || 'ไม่ระบุ',
+            amount: amount,
+            type: tx.category?.type?.name?.toLowerCase() as "income" | "expense" | "transfer",
+            date: txDate.toISOString().split('T')[0],
+            account: tx.account,
+            category: tx.category
+          };
+        });
+      }
+
+      // อัปเดตข้อมูล
+      setData({
+        userName: userData.displayname || userData.firstname || 'ผู้ใช้',
+        totalBalance,
+        totalIncome,
+        totalExpense,
+        recentTransactions,
+        accounts
+      });
+
+      console.log('Dashboard data loaded:', {
+        totalBalance,
+        totalIncome,
+        totalExpense,
+        transactionsCount: recentTransactions.length,
+        accountsCount: accounts.length
+      });
+
+    } catch (error: any) {
+      console.error('Load dashboard data error:', error);
+      setError('เกิดข้อผิดพลาดในการโหลดข้อมูล');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ตรวจสอบการเข้าสู่ระบบและโหลดข้อมูล user
   useEffect(() => {
-    // ในอนาคต ให้ fetch ข้อมูลจริงจาก API ที่นี่
-    setData(mockData);
-  }, []);
+    console.log("Dashboard: Checking authentication...");
+    
+    const token = getAuthToken();
+    const userData = getUserData();
+    
+    console.log("Dashboard: Token:", !!token);
+    console.log("Dashboard: User data:", userData);
+    
+    if (!token || !userData) {
+      // ถ้าไม่มี token หรือ user data ให้กลับไปหน้า login
+      console.log("Dashboard: No token or user data, redirecting to login");
+      router.push('/login');
+      return;
+    }
+
+    // ตั้งค่าข้อมูล user
+    setUser(userData);
+    console.log("Dashboard: User set successfully");
+    
+    // โหลดข้อมูล Dashboard จาก API
+    loadDashboardData(userData);
+  }, [router]);
+
+  // Refresh data เมื่อ component กลับมา focus
+  useEffect(() => {
+    const handleFocus = () => {
+      const userData = getUserData();
+      if (userData && !loading) {
+        console.log('Dashboard: Page focused, refreshing data...');
+        loadDashboardData(userData);
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [loading]);
 
   /**
    * จัดการการออกจากระบบ
@@ -207,17 +320,20 @@ function DashboardPage() {
     console.log("Logout initiated...");
     setShowLogoutToast(true);
 
+    // ลบ token และ user data
+    removeAuthToken();
+    removeUserData();
+
     setTimeout(() => {
-      // router.push('/login'); // สำหรับแอปจริง
-      // @ts-ignore
-      window.location.href = "/login"; // สำหรับ preview
+      router.push('/login');
     }, 2000);
   };
 
   // ลบ mockNavigate
 
   return (
-    <div className="min-h-screen bg-gray-100 font-inter">
+    <AuthGuard>
+      <div className="min-h-screen bg-gray-100 font-inter">
       {/* --- (ใหม่) Toast ออกจากระบบ --- */}
       {showLogoutToast && (
         <div className="fixed top-5 right-5 z-50 bg-blue-600 text-white px-6 py-4 rounded-lg shadow-lg flex items-center animate-pulse">
@@ -235,11 +351,28 @@ function DashboardPage() {
               <h1 className="text-2xl font-bold text-blue-600">MyExpenses</h1>
             </div>
 
-            {/* ชื่อผู้ใช้และปุ่มออกจากระบบ */}
-            <div className="flex items-center">
+            {/* ชื่อผู้ใช้และปุ่มต่างๆ */}
+            <div className="flex items-center space-x-3">
               <span className="text-gray-700 mr-4 hidden md:block">
                 สวัสดี, <span className="font-medium">{data.userName}</span>!
               </span>
+              
+              {/* ปุ่ม Refresh */}
+              <button
+                onClick={() => {
+                  const userData = getUserData();
+                  if (userData) loadDashboardData(userData);
+                }}
+                disabled={loading}
+                className="flex items-center px-3 py-2 text-sm font-medium rounded-md text-blue-600 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                title="รีเฟรชข้อมูล"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <span className="ml-1 hidden md:inline">รีเฟรช</span>
+              </button>
+
               <button
                 onClick={handleLogout}
                 disabled={showLogoutToast}
@@ -255,16 +388,65 @@ function DashboardPage() {
 
       {/* --- Main Content --- */}
       <main className="max-w-7xl mx-auto p-4 md:p-8">
+        {/* --- Loading State --- */}
+        {loading && (
+          <div className="flex justify-center items-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <span className="ml-3 text-gray-600">กำลังโหลดข้อมูล...</span>
+          </div>
+        )}
+
+        {/* --- Error State --- */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-400">
+            <p className="text-red-700">{error}</p>
+            <button
+              onClick={() => {
+                const userData = getUserData();
+                if (userData) loadDashboardData(userData);
+              }}
+              className="mt-2 px-4 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700"
+            >
+              ลองใหม่
+            </button>
+          </div>
+        )}
+
+        {!loading && !error && (
+          <>
+        {/* Content wrapper เพื่อซ่อนเมื่อ loading หรือ error */}
         {/* --- 1. ภาพรวม (Overview Section) --- */}
         <section className="mb-8">
           <h2 className="text-2xl font-semibold text-gray-800 mb-4">ภาพรวม</h2>
+          
+          {/* แสดงข้อมูลสรุปบัญชี */}
+          {data.accounts.length > 0 && (
+            <div className="mb-6 p-4 bg-blue-50 rounded-lg">
+              <h3 className="text-lg font-medium text-blue-800 mb-2">
+                บัญชีของคุณ ({data.accounts.length} บัญชี)
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {data.accounts.map((account) => (
+                  <div key={account.id} className="bg-white p-3 rounded border">
+                    <p className="font-medium text-gray-800">{account.name}</p>
+                    <p className="text-sm text-blue-600 font-semibold">
+                      ฿{parseFloat(account.balance || '0').toLocaleString("th-TH", {
+                        minimumFractionDigits: 2,
+                      })}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* การ์ด: ยอดคงเหลือ */}
             <div className="bg-white p-6 rounded-lg shadow-lg transition-transform hover:scale-105">
               <h3 className="text-lg font-medium text-gray-500">ยอดคงเหลือ</h3>
               <p className="text-4xl font-extrabold text-blue-600 mt-2">
                 ฿
-                {data.balance.toLocaleString("th-TH", {
+                {data.totalBalance.toLocaleString("th-TH", {
                   minimumFractionDigits: 2,
                 })}
               </p>
@@ -315,7 +497,7 @@ function DashboardPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* ปุ่ม: บันทึกรายรับ/รายจ่าย */}
             <button
-              onClick={() => router.push("/transactions/new")}
+              onClick={() => router.push("/transactions")}
               className="flex items-center justify-center p-4 bg-blue-600 text-white font-medium rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition duration-300"
             >
               <PlusCircleIcon />
@@ -358,40 +540,58 @@ function DashboardPage() {
           </h2>
           <div className="flow-root">
             <ul role="list" className="divide-y divide-gray-200">
-              {data.recentTransactions.map((tx) => (
-                <li
-                  key={tx.id}
-                  className="py-4 flex justify-between items-center"
-                >
-                  <div className="flex-1">
-                    <p className="text-md font-medium text-gray-900 truncate">
-                      {tx.description}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      {new Date(tx.date).toLocaleDateString("th-TH", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}
-                    </p>
-                  </div>
-                  <div
-                    className={`text-lg font-semibold ${
-                      tx.type === "income" ? "text-green-600" : "text-red-600"
-                    }`}
-                  >
-                    {tx.type === "income" ? "+" : "-"}฿
-                    {tx.amount.toLocaleString("th-TH", {
-                      minimumFractionDigits: 2,
-                    })}
-                  </div>
+              {data.recentTransactions.length === 0 ? (
+                <li className="py-8 text-center text-gray-500">
+                  ยังไม่มีรายการธุรกรรม
                 </li>
-              ))}
+              ) : (
+                data.recentTransactions.map((tx: DashboardTransaction) => (
+                  <li
+                    key={tx.id}
+                    className="py-4 flex justify-between items-center"
+                  >
+                    <div className="flex-1">
+                      <p className="text-md font-medium text-gray-900 truncate">
+                        {tx.description}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        {new Date(tx.date).toLocaleDateString("th-TH", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                        {tx.account && (
+                          <span className="ml-2 text-xs bg-gray-100 px-2 py-1 rounded">
+                            {tx.account.name}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    <div
+                      className={`text-lg font-semibold ${
+                        tx.type === "income" 
+                          ? "text-green-600" 
+                          : tx.type === "transfer"
+                          ? "text-blue-600"
+                          : "text-red-600"
+                      }`}
+                    >
+                      {tx.type === "income" ? "+" : tx.type === "transfer" ? "↔" : "-"}฿
+                      {tx.amount.toLocaleString("th-TH", {
+                        minimumFractionDigits: 2,
+                      })}
+                    </div>
+                  </li>
+                ))
+              )}
             </ul>
           </div>
         </section>
+        </>
+        )}
       </main>
-    </div>
+      </div>
+    </AuthGuard>
   );
 }
 

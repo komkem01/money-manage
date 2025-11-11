@@ -1,6 +1,11 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from 'next/navigation';
+import { createTransaction } from '@/lib/transactions';
+import { getAllAccounts, Account } from '@/lib/accounts';
+import { getAllCategories, Category } from '@/lib/categories';
+import { getAuthToken } from '@/lib/auth';
+import AuthGuard from '@/components/AuthGuard';
 
 // --- ไอคอน SVG ---
 const ArrowLeftIcon = () => (
@@ -103,24 +108,7 @@ const TransferIcon = () => (
 // --- ประเภทข้อมูล (Types) ---
 type TransactionType = "expense" | "income" | "transfer";
 
-// --- Mock Data (ข้อมูลจำลอง) ---
-// (ในแอปจริง, ข้อมูลนี้ควรมาจาก API)
-const mockCategories = {
-  expense: [
-    { id: "cat_e1", name: "ค่าอาหาร" },
-    { id: "cat_e2", name: "ค่าเดินทาง" },
-    { id: "cat_e3", name: "ช้อปปิ้ง" },
-  ],
-  income: [
-    { id: "cat_i1", name: "เงินเดือน" },
-    { id: "cat_i2", name: "รายได้เสริม" },
-  ],
-};
-const mockAccounts = [
-  { id: "acc_1", name: "เงินสด" },
-  { id: "acc_2", name: "บัญชีธนาคาร A" },
-  { id: "acc_3", name: "บัตรเครดิต B" },
-];
+// ไม่ต้องใช้ mock data แล้ว เพราะจะดึงจาก API
 
 /**
  * หน้าบันทึกรายการใหม่ (New Transaction Page)
@@ -131,6 +119,12 @@ function NewTransactionPage() {
   const [activeTab, setActiveTab] = useState<TransactionType>("expense");
   const [showToast, setShowToast] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>('');
+
+  // Data from API
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
 
   // State สำหรับฟอร์ม
   const [amount, setAmount] = useState("");
@@ -140,49 +134,271 @@ function NewTransactionPage() {
   const [transferToAccount, setTransferToAccount] = useState("");
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]); // วันที่ปัจจุบัน
+  
+  // State สำหรับ highlight บัญชีที่เปลี่ยนแปลง
+  const [updatedAccounts, setUpdatedAccounts] = useState<Set<string>>(new Set());
+
+  // โหลดข้อมูลเริ่มต้น
+  useEffect(() => {
+    console.log('Component mounted, loading reference data...');
+    
+    // Debug token information
+    const token = getAuthToken();
+    console.log('Token check on mount:', {
+      hasToken: !!token,
+      tokenLength: token?.length,
+      tokenPreview: token ? token.substring(0, 20) + '...' : 'No token',
+      localStorage: typeof window !== 'undefined' ? localStorage.getItem('authToken') : 'N/A',
+      cookieHasAuth: typeof window !== 'undefined' ? document.cookie.includes('authToken') : 'N/A'
+    });
+    
+    loadReferenceData();
+  }, []);
+
+  // โหลดข้อมูลบัญชีและหมวดหมู่
+  const loadReferenceData = async () => {
+    try {
+      setLoading(true);
+      setError(''); // Clear previous errors
+      
+      console.log('Getting auth token...');
+      const token = getAuthToken();
+      console.log('Token status:', { 
+        hasToken: !!token, 
+        tokenLength: token?.length || 0,
+        localStorage: typeof window !== 'undefined' ? !!localStorage.getItem('authToken') : 'N/A',
+        cookie: typeof window !== 'undefined' ? document.cookie.includes('authToken') : 'N/A'
+      });
+      
+      if (!token) {
+        console.error('No authentication token found');
+        setError('ไม่พบ authentication token กรุณาเข้าสู่ระบบใหม่');
+        setLoading(false);
+        setTimeout(() => {
+          router.push('/login');
+        }, 2000);
+        return;
+      }
+
+      console.log('Loading reference data with token present');
+      console.log('Making API calls to:', {
+        accountsUrl: 'http://192.168.1.44:5000/api/accounts',
+        categoriesUrl: 'http://192.168.1.44:5000/api/categories'
+      });
+
+      // Test backend connection first
+      try {
+        const healthCheck = await fetch('http://192.168.1.44:5000/health');
+        console.log('Backend health check:', healthCheck.status, await healthCheck.text());
+      } catch (healthError) {
+        console.error('Backend health check failed:', healthError);
+        setError('ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาตรวจสอบว่าเซิร์ฟเวอร์รันอยู่');
+        setLoading(false);
+        return;
+      }
+
+      const [accountsResponse, categoriesResponse] = await Promise.all([
+        getAllAccounts().catch(err => {
+          console.error('Accounts API error:', err);
+          return { success: false, message: 'Failed to fetch accounts: ' + err.message };
+        }),
+        getAllCategories().catch(err => {
+          console.error('Categories API error:', err);
+          return { success: false, message: 'Failed to fetch categories: ' + err.message };
+        })
+      ]);
+
+      console.log('API Responses:', {
+        accounts: accountsResponse,
+        categories: categoriesResponse
+      });
+
+      if (accountsResponse.success && 'data' in accountsResponse && accountsResponse.data) {
+        setAccounts(accountsResponse.data);
+      } else {
+        console.error('Failed to load accounts:', accountsResponse);
+        setError(accountsResponse.message || 'ไม่สามารถโหลดข้อมูลบัญชีได้');
+      }
+
+      if (categoriesResponse.success && 'data' in categoriesResponse && categoriesResponse.data) {
+        setCategories(Array.isArray(categoriesResponse.data) ? categoriesResponse.data : [categoriesResponse.data]);
+      } else {
+        console.error('Failed to load categories:', categoriesResponse);
+        setError(categoriesResponse.message || 'ไม่สามารถโหลดข้อมูลหมวดหมู่ได้');
+      }
+    } catch (error: any) {
+      console.error('Load reference data error:', error);
+      let errorMessage = 'เกิดข้อผิดพลาดในการโหลดข้อมูล';
+      
+      if (error.message?.includes('authentication') || error.message?.includes('token')) {
+        errorMessage = 'การยืนยันตัวตนล้มเหลว กรุณาเข้าสู่ระบบใหม่';
+        setTimeout(() => {
+          router.push('/login');
+        }, 2000);
+      } else if (error.message?.includes('fetch')) {
+        errorMessage = 'ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้';
+      }
+      
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   /**
-   * จัดการการส่งฟอร์ม (Mock)
+   * รีเฟรชข้อมูลบัญชีหลังจากทำธุรกรรม
    */
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const refreshAccountData = async (affectedAccountIds: string[] = []) => {
+    try {
+      console.log('Refreshing account data...');
+      const accountsResponse = await getAllAccounts();
+      
+      if (accountsResponse.success && 'data' in accountsResponse && accountsResponse.data) {
+        console.log('Previous accounts:', accounts.map(acc => ({ id: acc.id, name: acc.name, balance: acc.balance })));
+        console.log('New accounts:', accountsResponse.data.map((acc: Account) => ({ id: acc.id, name: acc.name, balance: acc.balance })));
+        
+        setAccounts(accountsResponse.data);
+        
+        // Highlight บัญชีที่มีการเปลี่ยนแปลง
+        if (affectedAccountIds.length > 0) {
+          setUpdatedAccounts(new Set(affectedAccountIds));
+          // เคลียร์ highlight หลังจาก 5 วินาที เพื่อให้เห็นการเปลี่ยนแปลงชัดเจน
+          setTimeout(() => {
+            setUpdatedAccounts(new Set());
+          }, 5000);
+        }
+        
+        console.log('Account data refreshed successfully');
+      } else {
+        console.error('Failed to refresh accounts:', accountsResponse);
+      }
+    } catch (error) {
+      console.error('Error refreshing account data:', error);
+    }
+  };
+
+  /**
+   * จัดการการส่งฟอร์ม
+   */
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (isSubmitting) return;
 
-    setIsSubmitting(true);
-    let formData = {};
+    try {
+      setIsSubmitting(true);
+      setError('');
 
-    if (activeTab === "transfer") {
-      formData = {
-        type: activeTab,
-        amount: parseFloat(amount),
-        fromAccountId: transferFromAccount,
-        toAccountId: transferToAccount,
-        description,
-        date,
-      };
-      if (transferFromAccount === transferToAccount) {
-        alert("บัญชีต้นทางและปลายทางต้องไม่ซ้ำกัน");
-        setIsSubmitting(false);
-        return;
+      let transactionData;
+
+      if (activeTab === "transfer") {
+        if (!transferFromAccount || !transferToAccount) {
+          alert("กรุณาเลือกบัญชีต้นทางและปลายทาง");
+          return;
+        }
+        
+        if (transferFromAccount === transferToAccount) {
+          alert("บัญชีต้นทางและปลายทางต้องไม่ซ้ำกัน");
+          return;
+        }
+
+        // ตรวจสอบยอดเงินในบัญชีต้นทาง
+        const fromAccount = accounts.find(acc => acc.id === transferFromAccount);
+        if (fromAccount) {
+          const currentBalance = parseFloat(fromAccount.balance || '0');
+          const transferAmount = parseFloat(amount);
+          
+          console.log('Transfer validation:', {
+            account: fromAccount.name,
+            currentBalance,
+            transferAmount,
+            sufficient: currentBalance >= transferAmount
+          });
+          
+          if (currentBalance < transferAmount) {
+            alert(`ยอดเงินในบัญชี "${fromAccount.name}" ไม่เพียงพอ\nยอดคงเหลือ: ${currentBalance.toLocaleString()} บาท\nต้องการโอน: ${transferAmount.toLocaleString()} บาท`);
+            return;
+          }
+        }
+        
+        // สำหรับ transfer บันทึก account_id (บัญชีต้นทาง) และ related_account_id (บัญชีปลายทาง)
+        transactionData = {
+          amount: parseFloat(amount),
+          description: description || "โอนเงิน",
+          date: date,
+          account_id: transferFromAccount, // บัญชีต้นทาง (เงินออก)
+          related_account_id: transferToAccount, // บัญชีปลายทาง (เงินเข้า)
+          category_id: selectedCategory || categories.find(cat => cat.type?.name === "Transfer")?.id || categories[0]?.id,
+        };
+      } else {
+        // ตรวจสอบยอดเงินสำหรับรายจ่าย
+        if (activeTab === "expense") {
+          const selectedAccountData = accounts.find(acc => acc.id === selectedAccount);
+          if (selectedAccountData) {
+            const currentBalance = parseFloat(selectedAccountData.balance || '0');
+            const expenseAmount = parseFloat(amount);
+            
+            console.log('Expense validation:', {
+              account: selectedAccountData.name,
+              currentBalance,
+              expenseAmount,
+              sufficient: currentBalance >= expenseAmount
+            });
+            
+            if (currentBalance < expenseAmount) {
+              alert(`ยอดเงินในบัญชี "${selectedAccountData.name}" ไม่เพียงพอ\nยอดคงเหลือ: ${currentBalance.toLocaleString()} บาท\nต้องการจ่าย: ${expenseAmount.toLocaleString()} บาท`);
+              return;
+            }
+          }
+        }
+
+        transactionData = {
+          amount: parseFloat(amount),
+          description,
+          date: date,
+          account_id: selectedAccount,
+          category_id: selectedCategory,
+        };
       }
-    } else {
-      formData = {
-        type: activeTab,
-        amount: parseFloat(amount),
-        categoryId: selectedCategory,
-        accountId: selectedAccount,
-        description,
-        date,
-      };
-    }
 
-    // --- Mock Logic ---
-    setShowToast(true);
-    setTimeout(() => {
+      const response = await createTransaction(transactionData);
+      
+      if (response.success) {
+        // อัปเดตข้อมูลบัญชีหลังจากบันทึกธุรกรรมสำเร็จ
+        console.log('Transaction created successfully:', response.data);
+        console.log('Refreshing account data...');
+        
+        // กำหนดบัญชีที่ได้รับผลกระทบ
+        const affectedAccounts = activeTab === "transfer" 
+          ? [transferFromAccount, transferToAccount].filter(Boolean)
+          : [selectedAccount].filter(Boolean);
+        
+        console.log('Affected accounts:', affectedAccounts);
+        
+        await refreshAccountData(affectedAccounts);
+        
+        // รีเซ็ตฟอร์ม
+        setAmount('');
+        setDescription('');
+        setSelectedCategory('');
+        setSelectedAccount('');
+        setTransferFromAccount('');
+        setTransferToAccount('');
+        
+        setShowToast(true);
+        
+        // ให้ผู้ใช้เห็นยอดเงินใหม่ก่อนไปหน้าอื่น
+        setTimeout(() => {
+          router.push("/transactions");
+        }, 3000); // เพิ่มเวลาให้เห็นการเปลี่ยนแปลงชัด
+      } else {
+        throw new Error(response.error || 'เกิดข้อผิดพลาดในการสร้างธุรกรรม');
+      }
+    } catch (error: any) {
+      console.error('Create transaction error:', error);
+      setError(error.message || 'เกิดข้อผิดพลาดในการสร้างธุรกรรม');
+    } finally {
       setIsSubmitting(false);
-      setShowToast(false);
-      router.push("/transactions");
-    }, 1500); // Toast 1.5 วินาทีแล้วเด้ง
+    }
   };
 
   // ลบ mockNavigate
@@ -191,6 +407,15 @@ function NewTransactionPage() {
    * Render ฟอร์มตาม Tab ที่เลือก
    */
   const renderFormContent = () => {
+    if (loading) {
+      return (
+        <div className="flex justify-center items-center py-8">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+          <span className="ml-2 text-gray-600">กำลังโหลดข้อมูล...</span>
+        </div>
+      );
+    }
+
     if (activeTab === "transfer") {
       // --- ฟอร์มสำหรับ "โยกย้าย" ---
       return (
@@ -214,9 +439,10 @@ function NewTransactionPage() {
                 <option value="" disabled>
                   เลือกบัญชีต้นทาง
                 </option>
-                {mockAccounts.map((acc) => (
+                {accounts.map((acc) => (
                   <option key={acc.id} value={acc.id}>
-                    {acc.name}
+                    {acc.name} (คงเหลือ: {parseFloat(acc.balance || '0').toLocaleString()} บาท)
+                    {updatedAccounts.has(acc.id) ? ' ✨ อัปเดตแล้ว' : ''}
                   </option>
                 ))}
               </select>
@@ -245,9 +471,10 @@ function NewTransactionPage() {
                 <option value="" disabled>
                   เลือกบัญชีปลายทาง
                 </option>
-                {mockAccounts.map((acc) => (
+                {accounts.map((acc) => (
                   <option key={acc.id} value={acc.id}>
-                    {acc.name}
+                    {acc.name} (คงเหลือ: {parseFloat(acc.balance || '0').toLocaleString()} บาท)
+                    {updatedAccounts.has(acc.id) ? ' ✨ อัปเดตแล้ว' : ''}
                   </option>
                 ))}
               </select>
@@ -261,8 +488,11 @@ function NewTransactionPage() {
     }
 
     // --- ฟอร์มสำหรับ "รายจ่าย" และ "รายรับ" ---
-    const categories =
-      activeTab === "expense" ? mockCategories.expense : mockCategories.income;
+    const filteredCategories = categories.filter(cat => {
+      const expectedType = activeTab === "expense" ? "Expense" : "Income";
+      return cat.type?.name === expectedType;
+    });
+
     return (
       <div className="space-y-4">
         {/* เลือกหมวดหมู่ */}
@@ -284,7 +514,7 @@ function NewTransactionPage() {
               <option value="" disabled>
                 เลือกหมวดหมู่
               </option>
-              {categories.map((cat) => (
+              {filteredCategories.map((cat) => (
                 <option key={cat.id} value={cat.id}>
                   {cat.name}
                 </option>
@@ -315,9 +545,10 @@ function NewTransactionPage() {
               <option value="" disabled>
                 เลือกบัญชี
               </option>
-              {mockAccounts.map((acc) => (
+              {accounts.map((acc) => (
                 <option key={acc.id} value={acc.id}>
-                  {acc.name}
+                  {acc.name} (คงเหลือ: {parseFloat(acc.balance || '0').toLocaleString()} บาท)
+                  {updatedAccounts.has(acc.id) ? ' ✨ อัปเดตแล้ว' : ''}
                 </option>
               ))}
             </select>
@@ -345,13 +576,21 @@ function NewTransactionPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 font-inter">
-      {/* --- Toast (ข้อความแจ้งเตือน) --- */}
-      {showToast && (
+    <AuthGuard>
+      <div className="min-h-screen bg-gray-100 font-inter">
+        {/* --- Toast (ข้อความแจ้งเตือน) --- */}
+        {showToast && (
         <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 w-full max-w-sm">
-          <div className="flex items-center justify-center p-4 rounded-lg shadow-lg bg-green-500 text-white animate-bounce">
-            <CheckCircleIcon />
-            <span className="ml-3 font-semibold">บันทึกรายการสำเร็จ!</span>
+          <div className="p-4 rounded-lg shadow-lg bg-green-500 text-white animate-bounce">
+            <div className="flex items-center mb-2">
+              <CheckCircleIcon />
+              <span className="ml-3 font-semibold">บันทึกรายการสำเร็จ!</span>
+            </div>
+            <div className="text-sm text-green-100">
+              💰 ยอดเงินในบัญชีได้รับการอัปเดตแล้ว
+              <br />
+              🔄 กำลังโหลดข้อมูลใหม่...
+            </div>
           </div>
         </div>
       )}
@@ -373,6 +612,29 @@ function NewTransactionPage() {
 
       {/* --- Main Content (Form) --- */}
       <main className="max-w-md mx-auto p-4">
+        {/* --- Loading State --- */}
+        {loading && (
+          <div className="mb-4 p-4 bg-blue-50 border-l-4 border-blue-400">
+            <div className="flex items-center">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+              <span className="ml-2 text-blue-700">กำลังโหลดข้อมูล...</span>
+            </div>
+          </div>
+        )}
+
+        {/* --- Error State --- */}
+        {error && (
+          <div className="mb-4 p-4 bg-red-50 border-l-4 border-red-400">
+            <p className="text-red-700">{error}</p>
+            <button
+              onClick={loadReferenceData}
+              className="mt-2 px-4 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700"
+            >
+              ลองใหม่
+            </button>
+          </div>
+        )}
+
         <div className="bg-white rounded-lg shadow-lg overflow-hidden">
           {/* --- Tabs --- */}
           <div className="flex">
@@ -478,6 +740,7 @@ function NewTransactionPage() {
         </div>
       </main>
     </div>
+    </AuthGuard>
   );
 }
 

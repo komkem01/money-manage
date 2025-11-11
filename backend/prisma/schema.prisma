@@ -1,0 +1,121 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --- Database enum: use the exact name `type_name` as requested ---
+enum type_name {
+  Income
+  Expense
+  Transfer
+}
+
+// --- types (global) ---
+model types {
+  id   String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name type_name @unique
+
+  // Relations
+  categories   categories[]
+  transactions transactions[]
+
+  @@map("types")
+}
+
+// --- users ---
+model users {
+  id          String  @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  firstname   String? @db.VarChar(255)
+  lastname    String? @db.VarChar(255)
+  displayname String? @db.VarChar(255)
+  phone       String? @db.VarChar(50)
+  email       String  @unique @db.VarChar(255)
+  password    String  @db.VarChar(255)
+  created_at  BigInt?
+  updated_at  BigInt?
+  deleted_at  BigInt?
+
+  // Relations
+  accounts     accounts[]
+  categories   categories[]
+  transactions transactions[]
+
+  @@map("users")
+  @@index([email], name: "idx_users_email")
+  @@index([deleted_at], name: "idx_users_deleted_at")
+}
+
+// --- accounts ---
+model accounts {
+  id         String  @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id    String  @db.Uuid
+  name       String  @db.VarChar(255)
+  amount     Decimal @default(0) @db.Decimal(18, 2)
+  created_at BigInt?
+  updated_at BigInt?
+  deleted_at BigInt?
+
+  // Relations
+  user                     users          @relation(fields: [user_id], references: [id])
+  transactions             transactions[] @relation("AccountTransactions")
+  related_transactions     transactions[] @relation("RelatedAccountTransactions")
+
+  @@map("accounts")
+  @@index([user_id], name: "idx_accounts_user_id")
+}
+
+// --- categories ---
+model categories {
+  id         String  @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id    String  @db.Uuid
+  type_id    String  @db.Uuid
+  name       String  @db.VarChar(255)
+  created_at BigInt?
+  updated_at BigInt?
+  deleted_at BigInt?
+
+  // Relations
+  user         users          @relation(fields: [user_id], references: [id])
+  type         types          @relation(fields: [type_id], references: [id])
+  transactions transactions[]
+
+  @@map("categories")
+  @@index([user_id, type_id], name: "idx_categories_user_id_type_id")
+}
+
+// --- transactions ---
+model transactions {
+  id                 String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id            String   @db.Uuid
+  type_id            String   @db.Uuid
+  category_id        String   @db.Uuid
+  account_id         String   @db.Uuid
+  related_account_id String?  @db.Uuid
+  date               BigInt
+  description        String?  @db.Text
+  amount             Decimal  @db.Decimal(18, 2)
+  created_at         BigInt?
+  updated_at         BigInt?
+  deleted_at         BigInt?
+
+  // Relations
+  user            users      @relation(fields: [user_id], references: [id])
+  type            types      @relation(fields: [type_id], references: [id])
+  category        categories @relation(fields: [category_id], references: [id])
+  account         accounts   @relation("AccountTransactions", fields: [account_id], references: [id])
+  related_account accounts?  @relation("RelatedAccountTransactions", fields: [related_account_id], references: [id])
+
+  @@map("transactions")
+  @@index([user_id], name: "idx_transactions_user_id")
+  @@index([date(sort: Desc)], name: "idx_transactions_date")
+  @@index([type_id], name: "idx_transactions_type_id")
+  @@index([category_id], name: "idx_transactions_category_id")
+  @@index([account_id], name: "idx_transactions_account_id")
+}

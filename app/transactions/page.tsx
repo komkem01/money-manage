@@ -1,6 +1,11 @@
 "use client";
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useRouter } from 'next/navigation';
+import { getAllTransactions, deleteTransaction, updateTransaction, Transaction as ApiTransaction } from '@/lib/transactions';
+import { getAllAccounts, Account } from '@/lib/accounts';
+import { getAllCategories, Category } from '@/lib/categories';
+import { getAuthToken } from '@/lib/auth';
+import AuthGuard from '@/components/AuthGuard';
 
 // --- ไอคอน SVG ---
 const ArrowLeftIcon = () => (
@@ -122,140 +127,19 @@ const ExclamationIcon = () => (
 
 // --- ประเภทข้อมูล (Interfaces) ---
 type TransactionType = "expense" | "income" | "transfer";
-interface Transaction {
+
+// Display transaction interface (transformed from API data)
+interface DisplayTransaction {
   id: string;
   date: string;
   category: string;
   account: string;
   amount: number;
   type: TransactionType;
+  categoryId: string;
+  accountId: string;
+  description?: string;
 }
-
-// --- ข้อมูลจำลอง (Mock Data) ---
-const mockCategories = {
-  expense: [
-    { id: "cat-e1", name: "ค่าอาหาร" },
-    { id: "cat-e2", name: "ค่าเดินทาง" },
-    { id: "cat-e3", name: "ค่าสาธารณูปโภค" },
-  ],
-  income: [
-    { id: "cat-i1", name: "เงินเดือน" },
-    { id: "cat-i2", name: "รายได้เสริม" },
-  ],
-  transfer: [], // โยกย้ายอาจไม่จำเป็นต้องมีหมวดหมู่ หรืออาจมี
-};
-const mockAccounts = [
-  { id: "acc-1", name: "เงินสด" },
-  { id: "acc-2", name: "บัญชีธนาคาร A" },
-  { id: "acc-3", name: "บัญชีธนาคาร B" },
-];
-
-const initialTransactions: Transaction[] = [
-  {
-    id: "t1",
-    date: "2025-11-10",
-    category: "ค่าอาหาร",
-    account: "เงินสด",
-    amount: 120,
-    type: "expense",
-  },
-  {
-    id: "t2",
-    date: "2025-11-10",
-    category: "เงินเดือน",
-    account: "บัญชีธนาคาร A",
-    amount: 25000,
-    type: "income",
-  },
-  {
-    id: "t3",
-    date: "2025-11-09",
-    category: "ค่าเดินทาง",
-    account: "เงินสด",
-    amount: 55,
-    type: "expense",
-  },
-  {
-    id: "t4",
-    date: "2025-11-09",
-    category: "โอนเงิน",
-    account: "บัญชีธนาคาร A -> B",
-    amount: 5000,
-    type: "transfer",
-  },
-  {
-    id: "t5",
-    date: "2025-11-08",
-    category: "ค่าสาธารณูปโภค",
-    account: "บัญชีธนาคาร A",
-    amount: 1500,
-    type: "expense",
-  },
-  {
-    id: "t6",
-    date: "2025-11-08",
-    category: "รายได้เสริม",
-    account: "บัญชีธนาคาร B",
-    amount: 3000,
-    type: "income",
-  },
-  {
-    id: "t7",
-    date: "2025-11-07",
-    category: "ค่าอาหาร",
-    account: "เงินสด",
-    amount: 200,
-    type: "expense",
-  },
-  {
-    id: "t8",
-    date: "2025-11-07",
-    category: "ค่าเดินทาง",
-    account: "เงินสด",
-    amount: 40,
-    type: "expense",
-  },
-  {
-    id: "t9",
-    date: "2025-11-06",
-    category: "ค่าอาหาร",
-    account: "เงินสด",
-    amount: 150,
-    type: "expense",
-  },
-  {
-    id: "t10",
-    date: "2025-11-05",
-    category: "ค่าอาหาร",
-    account: "เงินสด",
-    amount: 80,
-    type: "expense",
-  },
-  {
-    id: "t11",
-    date: "2025-11-04",
-    category: "รายได้เสริม",
-    account: "บัญชีธนาคาร A",
-    amount: 2000,
-    type: "income",
-  },
-  {
-    id: "t12",
-    date: "2025-11-03",
-    category: "ค่าเดินทาง",
-    account: "เงินสด",
-    amount: 120,
-    type: "expense",
-  },
-  {
-    id: "t13",
-    date: "2025-11-02",
-    category: "ค่าอาหาร",
-    account: "เงินสด",
-    amount: 300,
-    type: "expense",
-  },
-];
 
 // --- ค่าคงที่ ---
 const ITEMS_PER_PAGE = 10;
@@ -267,32 +151,125 @@ const ITEMS_PER_PAGE = 10;
  */
 function TransactionListPage() {
   const router = useRouter();
+  
   // --- State ---
-  const [transactions, setTransactions] =
-    useState<Transaction[]>(initialTransactions);
+  const [transactions, setTransactions] = useState<DisplayTransaction[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>('');
   const [showToast, setShowToast] = useState<string | null>(null);
 
   // State สำหรับ Modal (ลบ และ แก้ไข)
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(
-    null
-  ); // เก็บ ID ที่จะลบ
-  const [showEditModal, setShowEditModal] = useState<Transaction | null>(null); // เก็บข้อมูล Transaction ที่จะแก้ไข
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [showEditModal, setShowEditModal] = useState<DisplayTransaction | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
 
-  // --- Logic การแบ่งหน้า (Pagination Logic) ---
-  const totalPages = Math.ceil(transactions.length / ITEMS_PER_PAGE);
-  const paginatedTransactions = useMemo(() => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    const endIndex = startIndex + ITEMS_PER_PAGE;
-    // แสดงรายการล่าสุดก่อน (โดยการ reverse)
-    return transactions.slice().reverse().slice(startIndex, endIndex);
-  }, [transactions, currentPage]);
+  // Transform API transaction to display transaction
+  const transformApiTransaction = (apiTx: ApiTransaction): DisplayTransaction => {
+    let type: TransactionType = "expense";
+    
+    if (apiTx.category?.type?.name === "Income") {
+      type = "income";
+    } else if (apiTx.category?.type?.name === "Transfer") {
+      type = "transfer";
+    } else if (apiTx.category?.type?.name === "Expense") {
+      type = "expense";
+    }
+
+    return {
+      id: apiTx.id,
+      date: new Date(parseInt(apiTx.date)).toISOString().split('T')[0],
+      category: apiTx.category?.name || 'ไม่ระบุ',
+      account: apiTx.account?.name || 'ไม่ระบุ',
+      amount: Math.round(parseFloat(apiTx.amount)), // amount เป็น Decimal แล้ว ไม่ต้องหาร 100
+      type,
+      categoryId: apiTx.category_id,
+      accountId: apiTx.account_id,
+      description: apiTx.description || '',
+    };
+  };
+
+  // โหลดข้อมูลธุรกรรม
+  const loadTransactions = async (page: number = 1) => {
+    try {
+      setLoading(true);
+      setError('');
+
+      const token = getAuthToken();
+      if (!token) {
+        router.push('/login');
+        return;
+      }
+
+      const response = await getAllTransactions(page, ITEMS_PER_PAGE);
+      
+      if (response.success && response.data) {
+        const displayTransactions = response.data.map(transformApiTransaction);
+        setTransactions(displayTransactions);
+        
+        if (response.pagination) {
+          setTotalPages(response.pagination.totalPages);
+          setTotalItems(response.pagination.totalItems);
+        }
+      } else {
+        throw new Error(response.error || 'เกิดข้อผิดพลาดในการโหลดข้อมูล');
+      }
+    } catch (error: any) {
+      console.error('Load transactions error:', error);
+      setError(error.message || 'เกิดข้อผิดพลาดในการโหลดข้อมูล');
+      
+      if (error.message?.includes('authentication') || error.message?.includes('token')) {
+        router.push('/login');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // โหลดข้อมูลบัญชีและหมวดหมู่
+  const loadReferenceData = async () => {
+    try {
+      const [accountsResponse, categoriesResponse] = await Promise.all([
+        getAllAccounts(),
+        getAllCategories()
+      ]);
+
+      if (accountsResponse.success && accountsResponse.data) {
+        setAccounts(accountsResponse.data);
+      }
+
+      if (categoriesResponse.success && categoriesResponse.data) {
+        setCategories(Array.isArray(categoriesResponse.data) ? categoriesResponse.data : [categoriesResponse.data]);
+      }
+    } catch (error: any) {
+      console.error('Load reference data error:', error);
+    }
+  };
+
+  // โหลดข้อมูลเมื่อ component mount หรือเมื่อ page เปลี่ยน
+  useEffect(() => {
+    loadTransactions(currentPage);
+  }, [currentPage, router]);
+
+  // โหลดข้อมูลอ้างอิงเมื่อ component mount
+  useEffect(() => {
+    loadReferenceData();
+  }, []);
 
   const goToNextPage = () => {
-    setCurrentPage((prev) => Math.min(prev + 1, totalPages));
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
   };
   const goToPrevPage = () => {
-    setCurrentPage((prev) => Math.max(prev - 1, 1));
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
   };
 
   // --- Toast Logic ---
@@ -303,26 +280,62 @@ function TransactionListPage() {
     }, 3000); // แสดง Toast 3 วินาที
   };
 
-  // --- CRUD Logic (จำลอง) ---
+  // --- CRUD Logic ---
 
   // (L) Delete Logic
-  const handleDelete = (id: string) => {
-    setTransactions((prev) => prev.filter((t) => t.id !== id));
-    setShowDeleteConfirm(null); // ปิด Modal ยืนยัน
-    triggerToast("ลบรายการสำเร็จ");
+  const handleDelete = async (id: string) => {
+    try {
+      setIsDeleting(true);
+      const response = await deleteTransaction(id);
+      
+      if (response.success) {
+        // รีเฟรชข้อมูลหลังจากลบ
+        await loadTransactions(currentPage);
+        setShowDeleteConfirm(null);
+        triggerToast("ลบรายการสำเร็จ");
+      } else {
+        throw new Error(response.error || 'เกิดข้อผิดพลาดในการลบ');
+      }
+    } catch (error: any) {
+      console.error('Delete transaction error:', error);
+      setError(error.message || 'เกิดข้อผิดพลาดในการลบธุรกรรม');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   // (E) Edit Logic
-  const handleEditSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleEditSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!showEditModal) return;
+    if (!showEditModal || isUpdating) return;
 
-    // จำลองการอัปเดตข้อมูลใน State
-    setTransactions((prev) =>
-      prev.map((t) => (t.id === showEditModal.id ? { ...showEditModal } : t))
-    );
-    setShowEditModal(null); // ปิด Modal แก้ไข
-    triggerToast("แก้ไขรายการสำเร็จ");
+    try {
+      setIsUpdating(true);
+      
+      const updateData = {
+        amount: showEditModal.amount,
+        description: showEditModal.description,
+        transaction_date: showEditModal.date,
+        account_id: showEditModal.accountId,
+        category_id: showEditModal.categoryId,
+      };
+
+      const response = await updateTransaction(showEditModal.id, updateData);
+      
+      if (response.success) {
+        // รีเฟรชข้อมูลหลังจากแก้ไข
+        await loadTransactions(currentPage);
+        setShowEditModal(null);
+        triggerToast("แก้ไขรายการสำเร็จ");
+      } else {
+        throw new Error(response.error || 'เกิดข้อผิดพลาดในการแก้ไข');
+      }
+    } catch (error: any) {
+      console.error('Update transaction error:', error);
+      setError(error.message || 'เกิดข้อผิดพลาดในการแก้ไขธุรกรรม');
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   const handleEditChange = (
@@ -330,11 +343,28 @@ function TransactionListPage() {
   ) => {
     if (!showEditModal) return;
     const { id, value } = e.target;
-    setShowEditModal((prev) =>
-      prev
-        ? { ...prev, [id]: id === "amount" ? parseFloat(value) : value }
-        : null
-    );
+    
+    if (id === "amount") {
+      setShowEditModal(prev => prev ? { ...prev, [id]: parseFloat(value) || 0 } : null);
+    } else if (id === "category") {
+      // อัปเดต categoryId เมื่อเปลี่ยนหมวดหมู่
+      const selectedCategory = categories.find(cat => cat.name === value);
+      setShowEditModal(prev => prev ? { 
+        ...prev, 
+        category: value,
+        categoryId: selectedCategory?.id || prev.categoryId
+      } : null);
+    } else if (id === "account") {
+      // อัปเดต accountId เมื่อเปลี่ยนบัญชี
+      const selectedAccount = accounts.find(acc => acc.name === value);
+      setShowEditModal(prev => prev ? { 
+        ...prev, 
+        account: value,
+        accountId: selectedAccount?.id || prev.accountId
+      } : null);
+    } else {
+      setShowEditModal(prev => prev ? { ...prev, [id]: value } : null);
+    }
   };
 
   // --- Helper Functions ---
@@ -352,7 +382,8 @@ function TransactionListPage() {
   // ลบ mockNavigate
 
   return (
-    <div className="min-h-screen bg-gray-100 font-inter">
+    <AuthGuard>
+      <div className="min-h-screen bg-gray-100 font-inter">
       {/* --- Header --- */}
       <header className="bg-white shadow-sm p-4">
         <div className="max-w-4xl mx-auto flex justify-between items-center">
@@ -379,11 +410,33 @@ function TransactionListPage() {
       {/* --- Main Content --- */}
       <main className="max-w-4xl mx-auto p-4 md:p-6">
         <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg min-h-[400px] flex flex-col">
+          {/* --- Loading State --- */}
+          {loading && (
+            <div className="flex justify-center items-center py-20">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <span className="ml-2 text-gray-600">กำลังโหลดข้อมูล...</span>
+            </div>
+          )}
+
+          {/* --- Error State --- */}
+          {error && (
+            <div className="p-4 bg-red-50 border-l-4 border-red-400">
+              <p className="text-red-700">{error}</p>
+              <button
+                onClick={() => loadTransactions(currentPage)}
+                className="mt-2 px-4 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700"
+              >
+                ลองใหม่
+              </button>
+            </div>
+          )}
+
           {/* --- รายการ (List) --- */}
           <div className="flex-grow">
-            {paginatedTransactions.length > 0 ? (
-              <ul className="divide-y divide-gray-200">
-                {paginatedTransactions.map((t) => (
+            {!loading && !error && (
+              transactions.length > 0 ? (
+                <ul className="divide-y divide-gray-200">
+                  {transactions.map((t: DisplayTransaction) => (
                   <li
                     key={t.id}
                     className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-4 px-2 hover:bg-gray-50 rounded-md"
@@ -443,8 +496,10 @@ function TransactionListPage() {
               </ul>
             ) : (
               <div className="text-center text-gray-500 py-20">
-                ไม่มีรายการธุรกรรม
+                <p className="text-lg">ไม่มีรายการธุรกรรม</p>
+                <p className="text-sm mt-2">เริ่มต้นสร้างธุรกรรมแรกของคุณ</p>
               </div>
+              )
             )}
           </div>
 
@@ -509,9 +564,10 @@ function TransactionListPage() {
               </button>
               <button
                 onClick={() => handleDelete(showDeleteConfirm)}
-                className="w-full px-4 py-2 font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
+                disabled={isDeleting}
+                className="w-full px-4 py-2 font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                ยืนยันการลบ
+                {isDeleting ? 'กำลังลบ...' : 'ยืนยันการลบ'}
               </button>
             </div>
           </div>
@@ -571,22 +627,17 @@ function TransactionListPage() {
                     required
                     className="w-full px-4 py-3 border border-gray-300 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    {/* หมายเหตุ: ในแอปจริง คุณต้องกรอง categories 
-                      ตาม `showEditModal.type` (expense/income) 
-                    */}
-                    {mockCategories[showEditModal.type].map((cat) => (
-                      <option key={cat.id} value={cat.name}>
-                        {cat.name}
-                      </option>
-                    ))}
-                    {/* Fallback ถ้าหมวดหมู่เดิมไม่มีในลิสต์ */}
-                    {!mockCategories[showEditModal.type].find(
-                      (c) => c.name === showEditModal.category
-                    ) && (
-                      <option value={showEditModal.category}>
-                        {showEditModal.category} (เดิม)
-                      </option>
-                    )}
+                    {/* กรองหมวดหมู่ตามประเภท */}
+                    {categories
+                      .filter(cat => cat.type?.name === (
+                        showEditModal.type === "expense" ? "Expense" :
+                        showEditModal.type === "income" ? "Income" : "Transfer"
+                      ))
+                      .map((cat) => (
+                        <option key={cat.id} value={cat.name}>
+                          {cat.name}
+                        </option>
+                      ))}
                   </select>
                 </div>
 
@@ -605,19 +656,11 @@ function TransactionListPage() {
                     required
                     className="w-full px-4 py-3 border border-gray-300 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    {mockAccounts.map((acc) => (
+                    {accounts.map((acc) => (
                       <option key={acc.id} value={acc.name}>
                         {acc.name}
                       </option>
                     ))}
-                    {/* Fallback ถ้าบัญชีเดิมไม่มีในลิสต์ */}
-                    {!mockAccounts.find(
-                      (a) => a.name === showEditModal.account
-                    ) && (
-                      <option value={showEditModal.account}>
-                        {showEditModal.account} (เดิม)
-                      </option>
-                    )}
                   </select>
                 </div>
 
@@ -671,16 +714,18 @@ function TransactionListPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+                  disabled={isUpdating}
+                  className="px-4 py-2 font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  บันทึกการแก้ไข
+                  {isUpdating ? 'กำลังบันทึก...' : 'บันทึกการแก้ไข'}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </AuthGuard>
   );
 }
 

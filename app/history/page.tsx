@@ -1,6 +1,8 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from 'next/navigation';
+import { getAllTransactions, Transaction as ApiTransaction } from '@/lib/transactions';
+import { getAuthToken } from '@/lib/auth';
 
 // --- ไอคอน SVG ---
 const ArrowLeftIcon = () => (
@@ -83,7 +85,8 @@ const ExpenseIcon = () => (
 // --- ประเภทข้อมูล (Interfaces) ---
 type TransactionType = "expense" | "income" | "transfer";
 
-interface Transaction {
+// ใช้ interface จาก API และเพิ่ม computed fields
+interface DisplayTransaction {
   id: string;
   date: string;
   type: TransactionType;
@@ -92,115 +95,7 @@ interface Transaction {
   description: string;
 }
 
-// --- Mock Data (ข้อมูลจำลอง) ---
-const mockTransactions: Transaction[] = [
-  {
-    id: "1",
-    date: "2023-10-01",
-    type: "expense",
-    category: "ค่าอาหาร",
-    amount: 120,
-    description: "มื้อเที่ยง",
-  },
-  {
-    id: "2",
-    date: "2023-10-01",
-    type: "income",
-    category: "เงินเดือน",
-    amount: 25000,
-    description: "เงินเดือน ต.ค.",
-  },
-  {
-    id: "3",
-    date: "2023-10-02",
-    type: "expense",
-    category: "ค่าเดินทาง",
-    amount: 350,
-    description: "เติมน้ำมัน",
-  },
-  {
-    id: "4",
-    date: "2023-10-03",
-    type: "expense",
-    category: "ค่าอาหาร",
-    amount: 80,
-    description: "กาแฟ",
-  },
-  {
-    id: "5",
-    date: "2023-10-04",
-    type: "expense",
-    category: "ช้อปปิ้ง",
-    amount: 1200,
-    description: "เสื้อ",
-  },
-  {
-    id: "6",
-    date: "2023-10-05",
-    type: "income",
-    category: "รายได้เสริม",
-    amount: 3000,
-    description: "ฟรีแลนซ์",
-  },
-  {
-    id: "7",
-    date: "2023-10-05",
-    type: "expense",
-    category: "ค่าอาหาร",
-    amount: 200,
-    description: "มื้อเย็น",
-  },
-  {
-    id: "8",
-    date: "2023-10-06",
-    type: "expense",
-    category: "ค่าเดินทาง",
-    amount: 45,
-    description: "BTS",
-  },
-  {
-    id: "9",
-    date: "2023-10-07",
-    type: "expense",
-    category: "ค่าที่พัก",
-    amount: 5500,
-    description: "ค่าเช่า",
-  },
-  {
-    id: "10",
-    date: "2023-10-08",
-    type: "expense",
-    category: "ค่าอาหาร",
-    amount: 150,
-    description: "ข้าวกล่อง",
-  },
-  {
-    id: "11",
-    date: "2023-10-09",
-    type: "expense",
-    category: "บันเทิง",
-    amount: 300,
-    description: "ดูหนัง",
-  },
-  {
-    id: "12",
-    date: "2023-10-10",
-    type: "expense",
-    category: "ค่าอาหาร",
-    amount: 90,
-    description: "มื้อเช้า",
-  },
-  {
-    id: "13",
-    date: "2023-10-10",
-    type: "expense",
-    category: "ค่าเดินทาง",
-    amount: 45,
-    description: "BTS",
-  },
-];
-
-const ITEMS_PER_PAGE = 10; // (ตามที่คุณขอ) จำกัดทีละ 10 ข้อมูล
+const ITEMS_PER_PAGE = 10; // จำกัดทีละ 10 ข้อมูล
 
 /**
  * หน้าประวัติทั้งหมด (History Page)
@@ -209,26 +104,90 @@ const ITEMS_PER_PAGE = 10; // (ตามที่คุณขอ) จำกั�
 function HistoryPage() {
   const router = useRouter();
   const [currentPage, setCurrentPage] = useState(1);
+  const [transactions, setTransactions] = useState<DisplayTransaction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>('');
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
 
-  // --- Logic การแบ่งหน้า (Pagination Logic) ---
-  const totalItems = mockTransactions.length;
-  const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
+  // แปลงข้อมูลจาก API เป็น DisplayTransaction format
+  const transformApiTransaction = (apiTx: ApiTransaction): DisplayTransaction => {
+    // กำหนด type ตามประเภทของ category
+    let type: TransactionType = "expense"; // default
+    
+    if (apiTx.category?.type?.name === "Income") {
+      type = "income";
+    } else if (apiTx.category?.type?.name === "Transfer") {
+      type = "transfer";
+    } else if (apiTx.category?.type?.name === "Expense") {
+      type = "expense";
+    }
 
-  // คำนวณรายการที่จะแสดงในหน้าปัจจุบัน
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const endIndex = startIndex + ITEMS_PER_PAGE;
-  const currentItems = mockTransactions.slice(startIndex, endIndex);
+    return {
+      id: apiTx.id,
+      date: new Date(parseInt(apiTx.date)).toLocaleDateString('th-TH'),
+      type,
+      category: apiTx.category?.name || 'ไม่ระบุ',
+      amount: Math.round(parseFloat(apiTx.amount)), // amount เป็น Decimal แล้ว ไม่ต้องหาร 100
+      description: apiTx.description || 'ไม่มีรายละเอียด',
+    };
+  };
+
+  // โหลดข้อมูลธุรกรรม
+  const loadTransactions = async (page: number = 1) => {
+    try {
+      setLoading(true);
+      setError('');
+
+      const token = getAuthToken();
+      if (!token) {
+        router.push('/login');
+        return;
+      }
+
+      console.log(`Loading transactions page ${page}...`);
+      const response = await getAllTransactions(page, ITEMS_PER_PAGE);
+      
+      if (response.success && response.data) {
+        const displayTransactions = response.data.map(transformApiTransaction);
+        setTransactions(displayTransactions);
+        
+        if (response.pagination) {
+          setTotalPages(response.pagination.totalPages);
+          setTotalItems(response.pagination.totalItems);
+        }
+      } else {
+        throw new Error(response.error || 'เกิดข้อผิดพลาดในการโหลดข้อมูล');
+      }
+    } catch (error: any) {
+      console.error('Load transactions error:', error);
+      setError(error.message || 'เกิดข้อผิดพลาดในการโหลดข้อมูล');
+      
+      if (error.message?.includes('authentication') || error.message?.includes('token')) {
+        router.push('/login');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // โหลดข้อมูลเมื่อ component mount หรือเมื่อ page เปลี่ยน
+  useEffect(() => {
+    loadTransactions(currentPage);
+  }, [currentPage, router]);
 
   // ฟังก์ชันเปลี่ยนหน้า
   const goToPreviousPage = () => {
-    setCurrentPage((prev) => (prev > 1 ? prev - 1 : 1));
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
   };
 
   const goToNextPage = () => {
-    setCurrentPage((prev) => (prev < totalPages ? prev + 1 : totalPages));
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
   };
-
-  // ลบ mockNavigate
 
   /**
    * แสดงไอคอนและสีตามประเภท
@@ -263,47 +222,73 @@ function HistoryPage() {
       {/* --- Main Content --- */}
       <main className="max-w-4xl mx-auto p-4 md:p-6">
         <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+          {/* --- Loading State --- */}
+          {loading && (
+            <div className="flex justify-center items-center p-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <span className="ml-2 text-gray-600">กำลังโหลดข้อมูล...</span>
+            </div>
+          )}
+
+          {/* --- Error State --- */}
+          {error && (
+            <div className="p-4 bg-red-50 border-l-4 border-red-400">
+              <p className="text-red-700">{error}</p>
+              <button
+                onClick={() => loadTransactions(currentPage)}
+                className="mt-2 px-4 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700"
+              >
+                ลองใหม่
+              </button>
+            </div>
+          )}
+
           {/* --- รายการธุรกรรม (Transaction List) --- */}
-          {currentItems.length > 0 ? (
-            <ul className="divide-y divide-gray-200">
-              {currentItems.map((item) => (
-                <li
-                  key={item.id}
-                  className="flex items-center justify-between p-4 hover:bg-gray-50"
-                >
-                  <div className="flex items-center space-x-3">
-                    <span className="p-2 rounded-full bg-gray-100">
-                      <TransactionIcon type={item.type} />
-                    </span>
-                    <div>
-                      <p className="text-md font-semibold text-gray-800">
-                        {item.category}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {item.description}
-                      </p>
+          {!loading && !error && (
+            transactions.length > 0 ? (
+              <ul className="divide-y divide-gray-200">
+                {transactions.map((item: DisplayTransaction) => (
+                  <li
+                    key={item.id}
+                    className="flex items-center justify-between p-4 hover:bg-gray-50"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <span className="p-2 rounded-full bg-gray-100">
+                        <TransactionIcon type={item.type} />
+                      </span>
+                      <div>
+                        <p className="text-md font-semibold text-gray-800">
+                          {item.category}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {item.description}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="text-right">
-                    <p
-                      className={`text-md font-bold ${getAmountColor(
-                        item.type
-                      )}`}
-                    >
-                      {item.type === "income" ? "+" : "-"}
-                      {item.amount.toLocaleString()} ฿
-                    </p>
-                    <p className="text-sm text-gray-400">{item.date}</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-center text-gray-500 p-8">ไม่พบข้อมูล</p>
+                    <div className="text-right">
+                      <p
+                        className={`text-md font-bold ${getAmountColor(
+                          item.type
+                        )}`}
+                      >
+                        {item.type === "income" ? "+" : "-"}
+                        {item.amount.toLocaleString()} ฿
+                      </p>
+                      <p className="text-sm text-gray-400">{item.date}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="text-center p-8">
+                <p className="text-gray-500 text-lg">ไม่พบข้อมูลธุรกรรม</p>
+                <p className="text-gray-400 text-sm mt-2">เริ่มต้นสร้างธุรกรรมแรกของคุณ</p>
+              </div>
+            )
           )}
 
           {/* --- Pagination Controls --- */}
-          {totalItems > ITEMS_PER_PAGE && (
+          {!loading && !error && totalPages > 1 && (
             <div className="flex items-center justify-between p-4 border-t border-gray-200">
               {/* ปุ่มก่อนหน้า */}
               <button
@@ -316,9 +301,14 @@ function HistoryPage() {
               </button>
 
               {/* สถานะหน้า */}
-              <span className="text-sm text-gray-500">
-                หน้า {currentPage} / {totalPages}
-              </span>
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-gray-500">
+                  หน้า {currentPage} / {totalPages}
+                </span>
+                <span className="text-xs text-gray-400">
+                  ({totalItems} รายการ)
+                </span>
+              </div>
 
               {/* ปุ่มถัดไป */}
               <button
