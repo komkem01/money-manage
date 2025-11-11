@@ -28,6 +28,7 @@ const allowedOrigins = [
   'http://127.0.0.1:3001',
   'http://192.168.1.44:3000',
   'http://192.168.1.44:3001',
+  'https://money-manage-five-gold.vercel.app',
   process.env.CORS_ORIGIN
 ].filter(Boolean);
 
