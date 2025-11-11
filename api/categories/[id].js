@@ -225,21 +225,37 @@ const handler = async (req, res) => {
         values.push(now);
         paramCount++;
 
+        const categoryIdParam = paramCount;
         values.push(categoryId);
+        paramCount++;
+
+        const userIdParam = paramCount;
         values.push(userId);
+        paramCount++;
 
         const updateQuery = `
           UPDATE categories 
           SET ${updates.join(', ')}
-          WHERE id = $${paramCount - 1} AND user_id = $${paramCount} AND deleted_at IS NULL
+          WHERE id = $${categoryIdParam} AND user_id = $${userIdParam} AND deleted_at IS NULL
           RETURNING *
         `;
 
         const updateResult = await client.query(updateQuery, values);
+
+        if (updateResult.rows.length === 0) {
+          return res.status(404).json({
+            success: false,
+            error: 'UPDATE_FAILED',
+            message: '❌ ไม่สามารถอัปเดตหมวดหมู่ได้ หมวดหมู่อาจถูกลบหรือไม่มีสิทธิ์เข้าถึง'
+          });
+        }
+
         const updatedCategory = updateResult.rows[0];
 
         // ดึงชื่อประเภทใหม่
-        const typeResult = await client.query('SELECT name FROM types WHERE id = $1', [updatedCategory.type_id]);
+  const typeResult = await client.query('SELECT name FROM types WHERE id = $1', [updatedCategory.type_id]);
+  const updatedTypeName = typeResult.rows[0]?.name || newTypeName;
+  const resolvedTypeName = updatedTypeName || 'Unknown';
 
         return res.json({
           success: true,
@@ -250,7 +266,7 @@ const handler = async (req, res) => {
             updated_at: updatedCategory.updated_at ? updatedCategory.updated_at.toString() : null,
             type: {
               id: updatedCategory.type_id,
-              name: typeResult.rows[0].name
+              name: resolvedTypeName
             }
           },
           changes: {

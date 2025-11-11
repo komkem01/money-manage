@@ -179,9 +179,9 @@ const handler = async (req, res) => {
         }
 
         // สร้าง update query แบบ dynamic
-        const updates = [];
-        const values = [];
-        let paramCount = 1;
+  const updates = [];
+  const values = [];
+  let paramCount = 1;
 
         if (name !== undefined) {
           updates.push(`name = $${paramCount}`);
@@ -208,13 +208,18 @@ const handler = async (req, res) => {
         values.push(now);
         paramCount++;
 
+        const accountIdParam = paramCount;
         values.push(accountId);
+        paramCount++;
+
+        const userIdParam = paramCount;
         values.push(userId);
+        paramCount++;
 
         const updateQuery = `
           UPDATE accounts 
           SET ${updates.join(', ')}
-          WHERE id = $${paramCount - 1} AND user_id = $${paramCount} AND deleted_at IS NULL
+          WHERE id = $${accountIdParam} AND user_id = $${userIdParam} AND deleted_at IS NULL
           RETURNING *
         `;
 

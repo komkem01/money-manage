@@ -349,22 +349,45 @@ const handler = async (req, res) => {
             paramCount++;
           }
 
+          if (updates.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({
+              success: false,
+              error: 'NO_UPDATES',
+              message: '❌ ไม่มีข้อมูลที่ต้องการอัปเดต กรุณาระบุข้อมูลใหม่'
+            });
+          }
+
           const now = Date.now().toString();
           updates.push(`updated_at = $${paramCount}`);
           values.push(now);
           paramCount++;
 
+          const transactionIdParam = paramCount;
           values.push(transactionId);
+          paramCount++;
+
+          const userIdParam = paramCount;
           values.push(userId);
+          paramCount++;
 
           const updateQuery = `
             UPDATE transactions 
             SET ${updates.join(', ')}
-            WHERE id = $${paramCount - 1} AND user_id = $${paramCount} AND deleted_at IS NULL
+            WHERE id = $${transactionIdParam} AND user_id = $${userIdParam} AND deleted_at IS NULL
             RETURNING *
           `;
 
           const updateResult = await client.query(updateQuery, values);
+
+          if (updateResult.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({
+              success: false,
+              error: 'UPDATE_FAILED',
+              message: '❌ ไม่สามารถอัปเดตธุรกรรมได้ ธุรกรรมอาจถูกลบหรือไม่มีสิทธิ์เข้าถึง'
+            });
+          }
 
           // คำนวณยอดเงินใหม่
           let newBalanceChange = newAmount;
