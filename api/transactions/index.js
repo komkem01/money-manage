@@ -145,7 +145,8 @@ const handler = async (req, res) => {
           amountType: typeof amount,
           dateType: typeof transactionDate,
           parsedAmount: parseFloat(amount),
-          dateValue: transactionDate ? new Date(transactionDate) : 'no date',
+          dateString: transactionDate,
+          datePattern: transactionDate ? /^\d{4}-\d{2}-\d{2}$/.test(transactionDate) : 'no date',
           isDateValid: transactionDate ? !isNaN(new Date(transactionDate).getTime()) : 'no date to validate'
         });
 
@@ -178,8 +179,19 @@ const handler = async (req, res) => {
           });
         }
 
-        // Validate date if provided
+        // Validate date if provided (should be YYYY-MM-DD format)
         if (transactionDate) {
+          // ตรวจสอบรูปแบบวันที่ (YYYY-MM-DD)
+          const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+          if (!datePattern.test(transactionDate)) {
+            return res.status(400).json({
+              success: false,
+              error: 'VALIDATION_ERROR',
+              message: '❌ รูปแบบวันที่ไม่ถูกต้อง (ต้องเป็น YYYY-MM-DD)',
+              field: 'date'
+            });
+          }
+          
           const dateValue = new Date(transactionDate);
           if (isNaN(dateValue.getTime())) {
             return res.status(400).json({
@@ -291,12 +303,15 @@ const handler = async (req, res) => {
           const transactionAmount = Math.abs(parseFloat(amount));
           const now = Date.now().toString();
           
-          // Validate and convert transaction date
+          // Validate and convert transaction date to Unix timestamp
           let txDate = now;
           if (transactionDate) {
+            console.log('Converting date from frontend:', transactionDate);
+            
+            // รับวันที่เป็น string (YYYY-MM-DD) และแปลงเป็น Unix timestamp
             const dateValue = new Date(transactionDate);
             if (isNaN(dateValue.getTime())) {
-              console.error('Invalid transaction date:', transactionDate);
+              console.error('Invalid transaction date:', transactionDate, 'parsed as:', dateValue);
               await client.query('ROLLBACK');
               return res.status(400).json({ 
                 success: false,
@@ -305,7 +320,10 @@ const handler = async (req, res) => {
                 field: 'date' 
               });
             }
+            
+            // แปลงเป็น Unix timestamp (milliseconds)
             txDate = dateValue.getTime().toString();
+            console.log('Date converted to Unix timestamp:', txDate);
           }
 
           const newTransactionResult = await client.query(

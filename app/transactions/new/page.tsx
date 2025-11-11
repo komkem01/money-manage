@@ -322,19 +322,11 @@ function NewTransactionPage() {
           }
         }
         
-        // Validate and convert date
-        const dateValue = new Date(date);
-        if (isNaN(dateValue.getTime())) {
-          alert("วันที่ไม่ถูกต้อง กรุณาเลือกวันที่ใหม่");
-          setIsSubmitting(false);
-          return;
-        }
-
         // สำหรับ transfer บันทึก account_id (บัญชีต้นทาง) และ related_account_id (บัญชีปลายทาง)
         transactionData = {
           amount: parseFloat(amount),
           description: description || "โอนเงิน",
-          date: dateValue.getTime().toString(), // แปลงเป็น bigint timestamp
+          date: date, // ส่งเป็น string ให้หลังบ้านแปลงเป็น Unix timestamp
           account_id: transferFromAccount, // บัญชีต้นทาง (เงินออก)
           related_account_id: transferToAccount, // บัญชีปลายทาง (เงินเข้า)
           category_id: selectedCategory || categories.find(cat => cat.type?.name === "Transfer")?.id || categories[0]?.id,
@@ -362,18 +354,10 @@ function NewTransactionPage() {
           }
         }
 
-        // Validate and convert date
-        const dateValue = new Date(date);
-        if (isNaN(dateValue.getTime())) {
-          alert("วันที่ไม่ถูกต้อง กรุณาเลือกวันที่ใหม่");
-          setIsSubmitting(false);
-          return;
-        }
-
         transactionData = {
           amount: parseFloat(amount),
           description,
-          date: dateValue.getTime().toString(), // แปลงเป็น bigint timestamp
+          date: date, // ส่งเป็น string ให้หลังบ้านแปลงเป็น Unix timestamp
           account_id: selectedAccount,
           category_id: selectedCategory,
         };
@@ -382,7 +366,7 @@ function NewTransactionPage() {
       console.log('Sending transaction data to API:', {
         ...transactionData,
         dateOriginal: date,
-        dateConverted: transactionData.date,
+        dateAsString: transactionData.date,
         isDateValid: !isNaN(new Date(date).getTime())
       });
 
