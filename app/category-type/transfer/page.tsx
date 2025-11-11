@@ -1,6 +1,9 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { useRouter } from 'next/navigation';
+import { useRouter } from "next/navigation";
+import { getCategoriesByType, createCategory, updateCategory, deleteCategory } from '@/lib/categories';
+import { getAllTypes } from '@/lib/types';
+import { getAuthToken } from '@/lib/auth';
 
 // --- ไอคอน SVG (คัดลอกมา) ---
 const ArrowLeftIcon = () => (
@@ -96,41 +99,84 @@ const CheckCircleIcon = () => (
 );
 
 // --- ประเภทข้อมูล (Interfaces) ---
-type CategoryType = "expense" | "income" | "transfer";
-
 interface Category {
   id: string;
   name: string;
-  type: CategoryType;
+  user_id: string;
+  type_id: string;
+  created_at: string;
+  updated_at?: string;
+  type: {
+    id: string;
+    name: string;
+  };
 }
 
-// --- Mock Data (ข้อมูลจำลอง) ---
-const mockCategories: Category[] = [
-  { id: "c1", name: "ค่าอาหาร", type: "expense" },
-  { id: "c2", name: "ค่าเดินทาง", type: "expense" },
-  { id: "c3", name: "ค่าที่พัก", type: "expense" },
-  { id: "c4", name: "เงินเดือน", type: "income" },
-  { id: "c5", name: "รายได้เสริม", type: "income" },
-  { id: "c6", name: "โอนเข้าบัญชีออมทรัพย์", type: "transfer" },
-];
+interface Type {
+  id: string;
+  name: string;
+}
 
 /**
- * (ใหม่) หน้าจัดการหมวดหมู่ "โยกย้าย" (Transfer Categories Page)
+ * หน้าจัดการหมวดหมู่ "โอนเงิน" (Transfer Categories Page)
  */
 const TransferCategoriesPage: React.FC = () => {
   const router = useRouter();
 
-  // (ใหม่) กำหนดประเภทตายตัวสำหรับหน้านี้
-  const pageType: CategoryType = "transfer";
-
-  const [categories, setCategories] = useState<Category[]>(mockCategories);
+  // State สำหรับเก็บรายการหมวดหมู่และประเภท
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [types, setTypes] = useState<Type[]>([]);
+  const [transferTypeId, setTransferTypeId] = useState<string>('');
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [showToast, setShowToast] = useState<string>("");
   const [deleteCategoryId, setDeleteCategoryId] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>("");
 
-  // กรองหมวดหมู่ตามประเภทของหน้านี้ (transfer)
-  const filteredCategories = categories.filter((c) => c.type === pageType);
+  // โหลดข้อมูลเมื่อ component mount
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const token = getAuthToken();
+        if (!token) {
+          router.push('/login');
+          return;
+        }
+
+        console.log("Loading types and transfer categories...");
+        
+        // โหลด types ก่อน
+        const typesResponse = await getAllTypes();
+        if (typesResponse.success && typesResponse.data) {
+          setTypes(typesResponse.data as Type[]);
+          
+          // หา transfer type ID
+          const transferType = (typesResponse.data as Type[]).find(type => type.name === 'Transfer');
+          if (transferType) {
+            setTransferTypeId(transferType.id);
+            
+            // โหลด categories สำหรับ transfer type
+            const categoriesResponse = await getCategoriesByType(transferType.id);
+            if (categoriesResponse.success && categoriesResponse.data) {
+              setCategories(categoriesResponse.data as Category[]);
+            }
+          }
+        }
+      } catch (error: any) {
+        console.error('Load data error:', error);
+        setError(error.message || 'เกิดข้อผิดพลาดในการโหลดข้อมูล');
+        
+        if (error.message?.includes('authentication') || error.message?.includes('token')) {
+          router.push('/login');
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [router]);
 
   const handleOpenAddModal = () => {
     setEditingCategory(null);
@@ -148,37 +194,68 @@ const TransferCategoriesPage: React.FC = () => {
   };
 
   // ดำเนินการลบจริง
-  const handleDeleteCategory = () => {
-    if (deleteCategoryId) {
-      setCategories((prev) => prev.filter((c) => c.id !== deleteCategoryId));
+  const handleDeleteCategory = async () => {
+    if (!deleteCategoryId) return;
+    
+    try {
+      const response = await deleteCategory(deleteCategoryId);
+      
+      if (response.success) {
+        const categoryToDelete = categories.find((c) => c.id === deleteCategoryId);
+        setCategories((prev) => prev.filter((c) => c.id !== deleteCategoryId));
+        showToastMessage(`ลบหมวดหมู่ "${categoryToDelete?.name}" สำเร็จ!`);
+      } else {
+        throw new Error('เกิดข้อผิดพลาดในการลบหมวดหมู่');
+      }
+    } catch (error: any) {
+      console.error('Delete category error:', error);
+      setError(error.message || 'เกิดข้อผิดพลาดในการลบหมวดหมู่');
+    } finally {
       setDeleteCategoryId(null);
-      showToastMessage("ลบหมวดหมู่สำเร็จ!");
     }
   };
 
-  const handleSaveCategory = (formData: {
+  const handleSaveCategory = async (formData: {
     id: string | null;
     name: string;
   }) => {
-    if (formData.id) {
-      setCategories((prev) =>
-        prev.map((c) =>
-          c.id === formData.id
-            ? { ...c, name: formData.name, type: pageType }
-            : c
-        )
-      );
-      showToastMessage("แก้ไขหมวดหมู่สำเร็จ!");
-    } else {
-      const newCategory: Category = {
-        id: `c${Math.random()}`,
-        name: formData.name,
-        type: pageType,
-      };
-      setCategories((prev) => [...prev, newCategory]);
-      showToastMessage("เพิ่มหมวดหมู่สำเร็จ!");
+    try {
+      if (formData.id) {
+        // แก้ไข
+        const response = await updateCategory(formData.id, {
+          name: formData.name,
+          type_id: transferTypeId
+        });
+        
+        if (response.success && response.data) {
+          setCategories((prev) =>
+            prev.map((c) =>
+              c.id === formData.id ? response.data as Category : c
+            )
+          );
+          showToastMessage("แก้ไขหมวดหมู่สำเร็จ!");
+        } else {
+          throw new Error(response.message || 'เกิดข้อผิดพลาดในการแก้ไขหมวดหมู่');
+        }
+      } else {
+        // เพิ่มใหม่
+        const response = await createCategory({
+          name: formData.name,
+          type_id: transferTypeId
+        });
+        
+        if (response.success && response.data) {
+          setCategories((prev) => [...prev, response.data as Category]);
+          showToastMessage("เพิ่มหมวดหมู่สำเร็จ!");
+        } else {
+          throw new Error(response.message || 'เกิดข้อผิดพลาดในการเพิ่มหมวดหมู่');
+        }
+      }
+      setIsModalOpen(false);
+    } catch (error: any) {
+      console.error('Save category error:', error);
+      setError(error.message || 'เกิดข้อผิดพลาดในการบันทึกหมวดหมู่');
     }
-    setIsModalOpen(false);
   };
 
   const showToastMessage = (message: string) => {
@@ -226,9 +303,24 @@ const TransferCategoriesPage: React.FC = () => {
 
           {/* --- รายการหมวดหมู่ (List) --- */}
           <div className="flow-root">
-            {filteredCategories.length > 0 ? (
+            {loading ? (
+              <div className="text-center py-8">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <p className="mt-2 text-gray-600">กำลังโหลด...</p>
+              </div>
+            ) : error ? (
+              <div className="text-center py-8">
+                <p className="text-red-600">{error}</p>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="mt-2 text-blue-600 hover:text-blue-800"
+                >
+                  ลองใหม่
+                </button>
+              </div>
+            ) : categories.length > 0 ? (
               <ul role="list" className="divide-y divide-gray-200">
-                {filteredCategories.map((category) => (
+                {categories.map((category: Category) => (
                   <li
                     key={category.id}
                     className="py-4 flex justify-between items-center"
@@ -251,32 +343,38 @@ const TransferCategoriesPage: React.FC = () => {
                       >
                         <DeleteIcon />
                       </button>
-      {/* --- Modal แจ้งเตือนก่อนลบหมวดหมู่ --- */}
-      {deleteCategoryId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white bg-opacity-80 backdrop-blur-sm">
-          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm mx-4">
-            <div className="flex flex-col items-center text-center">
-              <DeleteIcon />
-              <h3 className="text-xl font-bold text-gray-800 mt-4">ยืนยันการลบ</h3>
-              <p className="text-gray-600 mt-2">คุณแน่ใจหรือไม่ว่าต้องการลบหมวดหมู่นี้?<br/>การกระทำนี้ไม่สามารถยกเลิกได้</p>
-            </div>
-            <div className="flex justify-center gap-4 mt-6">
-              <button
-                onClick={() => setDeleteCategoryId(null)}
-                className="w-full px-4 py-2 font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
-              >
-                ยกเลิก
-              </button>
-              <button
-                onClick={handleDeleteCategory}
-                className="w-full px-4 py-2 font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
-              >
-                ยืนยันการลบ
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+                      {/* --- Modal แจ้งเตือนก่อนลบหมวดหมู่ --- */}
+                      {deleteCategoryId && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white bg-opacity-80 backdrop-blur-sm">
+                          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm mx-4">
+                            <div className="flex flex-col items-center text-center">
+                              <DeleteIcon />
+                              <h3 className="text-xl font-bold text-gray-800 mt-4">
+                                ยืนยันการลบ
+                              </h3>
+                              <p className="text-gray-600 mt-2">
+                                คุณแน่ใจหรือไม่ว่าต้องการลบหมวดหมู่นี้?
+                                <br />
+                                การกระทำนี้ไม่สามารถยกเลิกได้
+                              </p>
+                            </div>
+                            <div className="flex justify-center gap-4 mt-6">
+                              <button
+                                onClick={() => setDeleteCategoryId(null)}
+                                className="w-full px-4 py-2 font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+                              >
+                                ยกเลิก
+                              </button>
+                              <button
+                                onClick={handleDeleteCategory}
+                                className="w-full px-4 py-2 font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
+                              >
+                                ยืนยันการลบ
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </li>
                 ))}
@@ -295,7 +393,6 @@ const TransferCategoriesPage: React.FC = () => {
           category={editingCategory}
           onClose={() => setIsModalOpen(false)}
           onSave={handleSaveCategory}
-          defaultType={pageType}
         />
       )}
 
@@ -307,21 +404,19 @@ const TransferCategoriesPage: React.FC = () => {
       )}
     </div>
   );
-}
+};
 
-// --- Component ย่อยสำหรับ Modal (ใช้โค้ดเดิม) ---
+// --- Component ย่อยสำหรับ Modal ---
 interface CategoryModalProps {
   category: Category | null;
   onClose: () => void;
   onSave: (formData: { id: string | null; name: string }) => void;
-  defaultType: CategoryType;
 }
 
 const CategoryModal: React.FC<CategoryModalProps> = ({
   category,
   onClose,
   onSave,
-  defaultType,
 }) => {
   const [name, setName] = useState<string>(category?.name || "");
   const [error, setError] = useState<string>("");
@@ -343,8 +438,7 @@ const CategoryModal: React.FC<CategoryModalProps> = ({
       >
         <div className="flex justify-between items-center mb-5">
           <h3 className="text-xl font-bold text-gray-800">
-            {category ? "แก้ไขหมวดหมู่" : "เพิ่มหมวดหมู่ใหม่"} (
-            {defaultType === "transfer" ? "โยกย้าย" : ""})
+            {category ? "แก้ไขหมวดหมู่" : "เพิ่มหมวดหมู่ใหม่"} (โอนเงิน)
           </h3>
           <button
             onClick={onClose}

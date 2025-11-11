@@ -23,7 +23,10 @@ const authenticateToken = async (req, res, next) => {
     const decoded = await verifyToken(token);
     
     // เพิ่มข้อมูล user และ token info เข้าไปใน request object
-    req.user = decoded.user;
+    req.user = {
+      id: decoded.userId, // สำคัญ: ใส่ id ที่ controller คาดหวัง
+      ...decoded.user,
+    };
     req.userId = decoded.userId;
     req.tokenData = {
       userId: decoded.userId,

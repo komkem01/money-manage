@@ -1,7 +1,7 @@
 "use client";
 import React, { useState } from "react";
-// import Link from 'next/link'; // แก้ไข: คอมเมนต์ออกชั่วคราวสำหรับ preview
 import { useRouter } from 'next/navigation';
+import { registerUser, storeAuthToken, storeUserData, getAuthToken, getUserData } from '@/lib/auth';
 
 // --- ไอคอน SVG ---
 const UserPlusIcon = () => (
@@ -79,37 +79,72 @@ const RegisterPage: React.FC = () => {
 
   /**
    * จัดการการส่งฟอร์มลงทะเบียน
-   * (Mock Data - ข้อมูลจำลอง)
+   * เชื่อมต่อกับ Backend API
    */
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (isSubmitting) return; // ป้องกันการกดซ้ำ
 
     setError(""); // เคลียร์ข้อความ error เก่า
 
-    // 1. ตรวจสอบรหัสผ่าน (ตามที่คุณขอ)
+    // 1. ตรวจสอบรหัสผ่าน
     if (formData.password !== formData.confirmPassword) {
       setError("รหัสผ่านไม่ตรงกัน");
       return;
     }
 
-    setIsSubmitting(true); // เริ่มกระบวนการ
+    // 2. ตรวจสอบความยาวรหัสผ่าน
+    if (formData.password.length < 6) {
+      setError("รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร");
+      return;
+    }
 
-    // --- Mock Logic ---
-    // ในอนาคต ให้แทนที่ส่วนนี้ด้วยการเรียก API
-    console.log("--- Mock Register ---");
-    const userData = { ...formData };
-    // @ts-ignore - ลบ confirmPassword ออกจาก object ที่จะส่ง
-    delete userData.confirmPassword;
-    console.log("User Data:", userData);
+    setIsSubmitting(true);
 
-    // 2. (ใหม่) แสดง Toast และตั้งเวลา Redirect
-    setShowToast(true); // แสดง Toast
+    try {
+      // 3. เตรียมข้อมูลสำหรับส่ง API
+      const userData = {
+        email: formData.email,
+        password: formData.password,
+        firstname: formData.firstName,
+        lastname: formData.lastName,
+        displayname: formData.nickname,
+        phone: formData.phone,
+      };
 
-    setTimeout(() => {
-      router.push('/login');
-    }, 2000); // รอ 2 วินาทีเพื่อให้เห็น Toast
-    // --- End Mock Logic ---
+      // 4. เรียก API ลงทะเบียน
+      console.log("Calling register API...");
+      const response = await registerUser(userData);
+
+      if (response.success) {
+        console.log("Register successful:", response);
+        
+        // 5. บันทึก token และข้อมูล user
+        console.log("Storing token:", response.data.token);
+        console.log("Storing user data:", response.data.user);
+        
+        storeAuthToken(response.data.token);
+        storeUserData(response.data.user);
+
+        // ตรวจสอบว่าเก็บสำเร็จหรือไม่
+        const storedToken = getAuthToken();
+        const storedUser = getUserData();
+        console.log("Token stored successfully:", !!storedToken);
+        console.log("User data stored successfully:", !!storedUser);
+
+        // 6. แสดง Toast สำเร็จ
+        setShowToast(true);
+
+        // 7. เด้งไปหน้า dashboard (เพราะได้ token แล้ว)
+        setTimeout(() => {
+          router.push('/dashboard');
+        }, 2000);
+      }
+    } catch (error: any) {
+      console.error("Register failed:", error);
+      setError(error.message || "เกิดข้อผิดพลาดในการลงทะเบียน กรุณาลองใหม่");
+      setIsSubmitting(false);
+    }
   };
 
   return (
