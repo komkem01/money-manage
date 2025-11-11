@@ -217,6 +217,15 @@ const handler = async (req, res) => {
         `;
 
         const updateResult = await client.query(updateQuery, values);
+        
+        if (updateResult.rows.length === 0) {
+          return res.status(404).json({ 
+            success: false,
+            error: 'UPDATE_FAILED',
+            message: '❌ ไม่สามารถอัปเดตบัญชีได้ บัญชีอาจถูกลบหรือไม่มีสิทธิ์เข้าถึง' 
+          });
+        }
+        
         const updatedAccount = updateResult.rows[0];
 
         return res.json({

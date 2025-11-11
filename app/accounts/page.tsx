@@ -219,13 +219,17 @@ function AccountsPage() {
   const handleSaveAccount = async (formData: AccountFormData) => {
     try {
       console.log("Saving account:", formData);
+      console.log("Is editing?", !!formData.id);
       
-      if (formData.id) {
+      if (formData.id && formData.id !== null) {
         // แก้ไขบัญชี (ใช้ PATCH method)
+        console.log("Updating account with ID:", formData.id);
         const response = await updateAccount(formData.id, {
           name: formData.name,
           amount: formData.amount
         });
+        
+        console.log("Update response:", response);
         
         if (response.success && response.data) {
           setAccounts((prev) =>
@@ -235,7 +239,8 @@ function AccountsPage() {
           );
           showToastMessage("แก้ไขบัญชีสำเร็จ!");
         } else {
-          setError(response.message || 'ไม่สามารถแก้ไขบัญชีได้');
+          console.error("Update failed:", response);
+          setError(response.message || response.error || 'ไม่สามารถแก้ไขบัญชีได้');
           return;
         }
       } else {

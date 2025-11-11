@@ -316,7 +316,7 @@ function TransactionListPage() {
       const updateData = {
         amount: showEditModal.amount,
         description: showEditModal.description,
-        transaction_date: showEditModal.date,
+        date: new Date(showEditModal.date).getTime().toString(), // แปลงเป็น bigint timestamp ตาม schema
         account_id: showEditModal.accountId,
         category_id: showEditModal.categoryId,
       };
@@ -659,7 +659,7 @@ function TransactionListPage() {
                   >
                     {accounts.map((acc) => (
                       <option key={acc.id} value={acc.name}>
-                        {acc.name}
+                        {acc.name} (คงเหลือ: {parseFloat(acc.balance || acc.amount || '0').toLocaleString()} บาท)
                       </option>
                     ))}
                   </select>

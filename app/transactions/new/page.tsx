@@ -182,21 +182,6 @@ function NewTransactionPage() {
       }
 
       console.log('Loading reference data with token present');
-      console.log('Making API calls to:', {
-        accountsUrl: 'http://192.168.1.44:5000/api/accounts',
-        categoriesUrl: 'http://192.168.1.44:5000/api/categories'
-      });
-
-      // Test backend connection first
-      try {
-        const healthCheck = await fetch('http://192.168.1.44:5000/health');
-        console.log('Backend health check:', healthCheck.status, await healthCheck.text());
-      } catch (healthError) {
-        console.error('Backend health check failed:', healthError);
-        setError('ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาตรวจสอบว่าเซิร์ฟเวอร์รันอยู่');
-        setLoading(false);
-        return;
-      }
 
       const [accountsResponse, categoriesResponse] = await Promise.all([
         getAllAccounts().catch(err => {
@@ -305,7 +290,7 @@ function NewTransactionPage() {
         // ตรวจสอบยอดเงินในบัญชีต้นทาง
         const fromAccount = accounts.find(acc => acc.id === transferFromAccount);
         if (fromAccount) {
-          const currentBalance = parseFloat(fromAccount.balance || '0');
+          const currentBalance = parseFloat(fromAccount.balance || fromAccount.amount || '0');
           const transferAmount = parseFloat(amount);
           
           console.log('Transfer validation:', {
@@ -325,7 +310,7 @@ function NewTransactionPage() {
         transactionData = {
           amount: parseFloat(amount),
           description: description || "โอนเงิน",
-          date: date,
+          date: new Date(date).getTime().toString(), // แปลงเป็น bigint timestamp
           account_id: transferFromAccount, // บัญชีต้นทาง (เงินออก)
           related_account_id: transferToAccount, // บัญชีปลายทาง (เงินเข้า)
           category_id: selectedCategory || categories.find(cat => cat.type?.name === "Transfer")?.id || categories[0]?.id,
@@ -335,7 +320,7 @@ function NewTransactionPage() {
         if (activeTab === "expense") {
           const selectedAccountData = accounts.find(acc => acc.id === selectedAccount);
           if (selectedAccountData) {
-            const currentBalance = parseFloat(selectedAccountData.balance || '0');
+            const currentBalance = parseFloat(selectedAccountData.balance || selectedAccountData.amount || '0');
             const expenseAmount = parseFloat(amount);
             
             console.log('Expense validation:', {
@@ -355,7 +340,7 @@ function NewTransactionPage() {
         transactionData = {
           amount: parseFloat(amount),
           description,
-          date: date,
+          date: new Date(date).getTime().toString(), // แปลงเป็น bigint timestamp
           account_id: selectedAccount,
           category_id: selectedCategory,
         };
@@ -442,7 +427,7 @@ function NewTransactionPage() {
                 </option>
                 {accounts.map((acc) => (
                   <option key={acc.id} value={acc.id}>
-                    {acc.name} (คงเหลือ: {parseFloat(acc.balance || '0').toLocaleString()} บาท)
+                    {acc.name} (คงเหลือ: {parseFloat(acc.balance || acc.amount || '0').toLocaleString()} บาท)
                     {updatedAccounts.has(acc.id) ? ' ✨ อัปเดตแล้ว' : ''}
                   </option>
                 ))}
@@ -474,7 +459,7 @@ function NewTransactionPage() {
                 </option>
                 {accounts.map((acc) => (
                   <option key={acc.id} value={acc.id}>
-                    {acc.name} (คงเหลือ: {parseFloat(acc.balance || '0').toLocaleString()} บาท)
+                    {acc.name} (คงเหลือ: {parseFloat(acc.balance || acc.amount || '0').toLocaleString()} บาท)
                     {updatedAccounts.has(acc.id) ? ' ✨ อัปเดตแล้ว' : ''}
                   </option>
                 ))}
@@ -548,7 +533,7 @@ function NewTransactionPage() {
               </option>
               {accounts.map((acc) => (
                 <option key={acc.id} value={acc.id}>
-                  {acc.name} (คงเหลือ: {parseFloat(acc.balance || '0').toLocaleString()} บาท)
+                  {acc.name} (คงเหลือ: {parseFloat(acc.balance || acc.amount || '0').toLocaleString()} บาท)
                   {updatedAccounts.has(acc.id) ? ' ✨ อัปเดตแล้ว' : ''}
                 </option>
               ))}
