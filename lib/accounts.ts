@@ -19,9 +19,10 @@ export interface Account {
 import { getAuthToken as getAuthTokenFromAuth } from './auth';
 
 // API Configuration
-const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? process.env.NEXT_PUBLIC_API_URL || 'https://your-domain.com/api'
-  : 'http://192.168.1.44:5000/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 
+  (process.env.NODE_ENV === 'production' 
+    ? 'https://money-manage-five-gold.vercel.app/api'
+    : 'http://192.168.1.44:5000/api');
 
 /**
  * Get Cookie Helper
