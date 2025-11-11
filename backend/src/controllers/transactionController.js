@@ -306,10 +306,25 @@ const createTransaction = async (req, res) => {
       }
     }
 
-    // สร้างธุรกรรมใหม่
+    // ตรวจสอบยอดเงินสำหรับ Transfer และ Expense ก่อนสร้าง transaction
+    if (categoryExists.type.name === 'Transfer' || categoryExists.type.name === 'Expense') {
+      const currentBalance = parseFloat(accountExists.amount.toString());
+      const requestAmount = parseFloat(amount);
+      
+      if (currentBalance < requestAmount) {
+        return res.status(400).json({
+          success: false,
+          message: `ยอดเงินในบัญชี "${accountExists.name}" ไม่เพียงพอ (คงเหลือ: ${currentBalance} บาท)`,
+        });
+      }
+    }
+
+    // สร้างธุรกรรมใหม่ - สำหรับ Transfer จะบันทึกจำนวนเป็นค่าบวกเสมอ
+    const transactionAmount = categoryExists.type.name === 'Transfer' ? Math.abs(parseFloat(amount)) : parseFloat(amount);
+    
     const newTransaction = await prisma.transactions.create({
       data: {
-        amount: parseFloat(amount),
+        amount: transactionAmount,
         description: description || null,
         date: BigInt(new Date(transactionDate || new Date()).getTime()),
         user_id: userId,
@@ -457,6 +472,13 @@ const updateTransaction = async (req, res) => {
         user_id: userId,
         deleted_at: null,
       },
+      include: {
+        category: {
+          include: {
+            type: true,
+          },
+        },
+      },
     });
 
     if (!existingTransaction) {
@@ -466,28 +488,47 @@ const updateTransaction = async (req, res) => {
       });
     }
 
-    // สร้าง object สำหรับการอัปเดต
+    console.log('Existing transaction:', {
+      id: existingTransaction.id,
+      amount: existingTransaction.amount.toString(),
+      type: existingTransaction.category.type.name,
+      account_id: existingTransaction.account_id,
+      related_account_id: existingTransaction.related_account_id
+    });
+
+    // เฉพาะการอัปเดตที่ไม่กระทบยอดเงิน เช่น description, date เท่านั้น
+    // การอัปเดต amount, account_id, category_id ต้องทำให้ระมัดระวัง
+    if (amount !== undefined && parseFloat(amount) !== parseFloat(existingTransaction.amount.toString())) {
+      return res.status(400).json({
+        success: false,
+        message: 'การแก้ไขจำนวนเงินต้องลบธุรกรรมเดิมและสร้างใหม่เพื่อความถูกต้องของยอดเงิน',
+      });
+    }
+
+    if (account_id !== undefined && account_id !== existingTransaction.account_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'การเปลี่ยนบัญชีต้องลบธุรกรรมเดิมและสร้างใหม่เพื่อความถูกต้องของยอดเงิน',
+      });
+    }
+
+    if (category_id !== undefined && category_id !== existingTransaction.category_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'การเปลี่ยนหมวดหมู่ต้องลบธุรกรรมเดิมและสร้างใหม่เพื่อความถูกต้องของยอดเงิน',
+      });
+    }
+
+    // สร้าง object สำหรับการอัปเดต (เฉพาะข้อมูลที่ไม่กระทบยอดเงิน)
     const updateData = {
       updated_at: BigInt(Date.now()),
     };
 
-    if (amount !== undefined) {
-      updateData.amount = parseFloat(amount);
-    }
     if (description !== undefined) {
       updateData.description = description;
     }
     if (transactionDate !== undefined) {
       updateData.date = BigInt(new Date(transactionDate).getTime());
-    }
-    if (account_id !== undefined) {
-      updateData.account_id = account_id;
-    }
-    if (category_id !== undefined) {
-      updateData.category_id = category_id;
-    }
-    if (related_account_id !== undefined) {
-      updateData.related_account_id = related_account_id;
     }
 
     // อัปเดตธุรกรรม
@@ -593,12 +634,62 @@ const deleteTransaction = async (req, res) => {
         user_id: userId,
         deleted_at: null,
       },
+      include: {
+        category: {
+          include: {
+            type: true,
+          },
+        },
+      },
     });
 
     if (!existingTransaction) {
       return res.status(404).json({
         success: false,
         message: 'ไม่พบธุรกรรมที่ระบุ',
+      });
+    }
+
+    console.log('Deleting transaction:', {
+      id: existingTransaction.id,
+      amount: existingTransaction.amount.toString(),
+      type: existingTransaction.category.type.name,
+      account_id: existingTransaction.account_id,
+      related_account_id: existingTransaction.related_account_id
+    });
+
+    // คืนยอดเงินกลับไปยังบัญชี (reverse ของการสร้าง transaction)
+    let balanceChange = parseFloat(existingTransaction.amount.toString());
+
+    if (existingTransaction.category.type.name === 'Expense') {
+      balanceChange = balanceChange; // คืนเงินกลับ (เพิ่มยอดเงิน)
+    } else if (existingTransaction.category.type.name === 'Income') {
+      balanceChange = -balanceChange; // ลดยอดเงิน (เพราะเอารายรับออก)
+    } else if (existingTransaction.category.type.name === 'Transfer') {
+      balanceChange = balanceChange; // คืนเงินกลับไปบัญชีต้นทาง
+    }
+
+    // อัปเดตยอดเงินในบัญชีหลัก
+    await prisma.accounts.update({
+      where: { id: existingTransaction.account_id },
+      data: {
+        amount: {
+          increment: balanceChange,
+        },
+        updated_at: BigInt(Date.now()),
+      },
+    });
+
+    // ถ้าเป็น Transfer ต้องลดยอดเงินในบัญชีปลายทางด้วย
+    if (existingTransaction.category.type.name === 'Transfer' && existingTransaction.related_account_id) {
+      await prisma.accounts.update({
+        where: { id: existingTransaction.related_account_id },
+        data: {
+          amount: {
+            increment: -parseFloat(existingTransaction.amount.toString()), // ลดยอดเงินในบัญชีปลายทาง
+          },
+          updated_at: BigInt(Date.now()),
+        },
       });
     }
 
@@ -613,7 +704,7 @@ const deleteTransaction = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'ลบธุรกรรมสำเร็จ',
+      message: 'ลบธุรกรรมสำเร็จ และปรับปรุงยอดเงินในบัญชีแล้ว',
     });
   } catch (error) {
     console.error('Delete transaction error:', error);

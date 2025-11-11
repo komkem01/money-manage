@@ -83,15 +83,34 @@ const getAuthHeader = (): Record<string, string> => {
  */
 export const getAllCategories = async (): Promise<CategoryResponse> => {
   try {
+    const token = getAuthToken();
+    if (!token) {
+      console.error('No authentication token found in getAllCategories');
+      return {
+        success: false,
+        message: 'Authentication token not found',
+        data: undefined
+      };
+    }
+
+    console.log('Fetching categories with token:', token.substring(0, 10) + '...');
+
     const response = await fetch(`${API_BASE_URL}/categories`, {
       method: 'GET',
       headers: getAuthHeader(),
     });
 
-    return await handleResponse(response);
-  } catch (error) {
+    const result = await handleResponse(response);
+    console.log('Categories API response:', result);
+    
+    return result;
+  } catch (error: any) {
     console.error('Get categories error:', error);
-    throw error;
+    return {
+      success: false,
+      message: error.message || 'Network error',
+      data: undefined
+    };
   }
 };
 

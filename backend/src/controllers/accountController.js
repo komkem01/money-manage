@@ -21,7 +21,8 @@ const getAllAccounts = async (req, res) => {
       ...account,
       id: account.id.toString(),
       user_id: account.user_id.toString(),
-      amount: account.amount.toString(),
+      balance: account.amount.toString(),  // Map amount to balance for frontend
+      amount: account.amount.toString(),   // Keep original field for backward compatibility
       created_at: account.created_at ? account.created_at.toString() : null,
       updated_at: account.updated_at ? account.updated_at.toString() : null
     }));
@@ -93,7 +94,8 @@ const createAccount = async (req, res) => {
       ...newAccount,
       id: newAccount.id.toString(),
       user_id: newAccount.user_id.toString(),
-      amount: newAccount.amount.toString(),
+      balance: newAccount.amount.toString(),  // Map amount to balance for frontend
+      amount: newAccount.amount.toString(),   // Keep original field for backward compatibility
       created_at: newAccount.created_at ? newAccount.created_at.toString() : null,
       updated_at: newAccount.updated_at ? newAccount.updated_at.toString() : null
     };
@@ -186,7 +188,8 @@ const updateAccount = async (req, res) => {
       ...updatedAccount,
       id: updatedAccount.id.toString(),
       user_id: updatedAccount.user_id.toString(),
-      amount: updatedAccount.amount.toString(),
+      balance: updatedAccount.amount.toString(),  // Map amount to balance for frontend
+      amount: updatedAccount.amount.toString(),   // Keep original field for backward compatibility
       created_at: updatedAccount.created_at ? updatedAccount.created_at.toString() : null,
       updated_at: updatedAccount.updated_at ? updatedAccount.updated_at.toString() : null
     };
@@ -292,7 +295,8 @@ const getAccountById = async (req, res) => {
       ...account,
       id: account.id.toString(),
       user_id: account.user_id.toString(),
-      amount: account.amount.toString(),
+      balance: account.amount.toString(),  // Map amount to balance for frontend
+      amount: account.amount.toString(),   // Keep original field for backward compatibility
       created_at: account.created_at ? account.created_at.toString() : null,
       updated_at: account.updated_at ? account.updated_at.toString() : null
     };

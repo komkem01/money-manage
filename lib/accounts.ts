@@ -56,8 +56,15 @@ export const getAllAccounts = async () => {
   try {
     const token = getAuthToken();
     if (!token) {
-      throw new Error('No authentication token found');
+      console.error('No authentication token found in getAllAccounts');
+      return {
+        success: false,
+        message: 'Authentication token not found',
+        data: null
+      };
     }
+
+    console.log('Fetching accounts with token:', token.substring(0, 10) + '...');
 
     const response = await fetch(`${API_BASE_URL}/accounts`, {
       method: 'GET',
@@ -68,15 +75,25 @@ export const getAllAccounts = async () => {
     });
 
     const data = await response.json();
+    console.log('Accounts API response:', { status: response.status, data });
 
     if (!response.ok) {
-      throw new Error(data.message || 'Failed to fetch accounts');
+      console.error('Accounts API error:', data);
+      return {
+        success: false,
+        message: data.message || 'Failed to fetch accounts',
+        data: null
+      };
     }
 
     return data;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Get accounts error:', error);
-    throw error;
+    return {
+      success: false,
+      message: error.message || 'Network error',
+      data: null
+    };
   }
 };
 

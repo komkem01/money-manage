@@ -134,10 +134,24 @@ function NewTransactionPage() {
   const [transferToAccount, setTransferToAccount] = useState("");
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]); // วันที่ปัจจุบัน
+  
+  // State สำหรับ highlight บัญชีที่เปลี่ยนแปลง
+  const [updatedAccounts, setUpdatedAccounts] = useState<Set<string>>(new Set());
 
   // โหลดข้อมูลเริ่มต้น
   useEffect(() => {
     console.log('Component mounted, loading reference data...');
+    
+    // Debug token information
+    const token = getAuthToken();
+    console.log('Token check on mount:', {
+      hasToken: !!token,
+      tokenLength: token?.length,
+      tokenPreview: token ? token.substring(0, 20) + '...' : 'No token',
+      localStorage: typeof window !== 'undefined' ? localStorage.getItem('authToken') : 'N/A',
+      cookieHasAuth: typeof window !== 'undefined' ? document.cookie.includes('authToken') : 'N/A'
+    });
+    
     loadReferenceData();
   }, []);
 
@@ -159,15 +173,39 @@ function NewTransactionPage() {
       if (!token) {
         console.error('No authentication token found');
         setError('ไม่พบ authentication token กรุณาเข้าสู่ระบบใหม่');
+        setLoading(false);
         setTimeout(() => {
           router.push('/login');
         }, 2000);
         return;
       }
 
-      console.log('Loading reference data with token present');      const [accountsResponse, categoriesResponse] = await Promise.all([
-        getAllAccounts(),
-        getAllCategories()
+      console.log('Loading reference data with token present');
+      console.log('Making API calls to:', {
+        accountsUrl: 'http://192.168.1.44:5000/api/accounts',
+        categoriesUrl: 'http://192.168.1.44:5000/api/categories'
+      });
+
+      // Test backend connection first
+      try {
+        const healthCheck = await fetch('http://192.168.1.44:5000/health');
+        console.log('Backend health check:', healthCheck.status, await healthCheck.text());
+      } catch (healthError) {
+        console.error('Backend health check failed:', healthError);
+        setError('ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาตรวจสอบว่าเซิร์ฟเวอร์รันอยู่');
+        setLoading(false);
+        return;
+      }
+
+      const [accountsResponse, categoriesResponse] = await Promise.all([
+        getAllAccounts().catch(err => {
+          console.error('Accounts API error:', err);
+          return { success: false, message: 'Failed to fetch accounts: ' + err.message };
+        }),
+        getAllCategories().catch(err => {
+          console.error('Categories API error:', err);
+          return { success: false, message: 'Failed to fetch categories: ' + err.message };
+        })
       ]);
 
       console.log('API Responses:', {
@@ -175,14 +213,14 @@ function NewTransactionPage() {
         categories: categoriesResponse
       });
 
-      if (accountsResponse.success && accountsResponse.data) {
+      if (accountsResponse.success && 'data' in accountsResponse && accountsResponse.data) {
         setAccounts(accountsResponse.data);
       } else {
         console.error('Failed to load accounts:', accountsResponse);
         setError(accountsResponse.message || 'ไม่สามารถโหลดข้อมูลบัญชีได้');
       }
 
-      if (categoriesResponse.success && categoriesResponse.data) {
+      if (categoriesResponse.success && 'data' in categoriesResponse && categoriesResponse.data) {
         setCategories(Array.isArray(categoriesResponse.data) ? categoriesResponse.data : [categoriesResponse.data]);
       } else {
         console.error('Failed to load categories:', categoriesResponse);
@@ -207,10 +245,37 @@ function NewTransactionPage() {
     }
   };
 
-  // โหลดข้อมูลเมื่อ component mount
-  useEffect(() => {
-    loadReferenceData();
-  }, [router]);
+  /**
+   * รีเฟรชข้อมูลบัญชีหลังจากทำธุรกรรม
+   */
+  const refreshAccountData = async (affectedAccountIds: string[] = []) => {
+    try {
+      console.log('Refreshing account data...');
+      const accountsResponse = await getAllAccounts();
+      
+      if (accountsResponse.success && 'data' in accountsResponse && accountsResponse.data) {
+        console.log('Previous accounts:', accounts.map(acc => ({ id: acc.id, name: acc.name, balance: acc.balance })));
+        console.log('New accounts:', accountsResponse.data.map((acc: Account) => ({ id: acc.id, name: acc.name, balance: acc.balance })));
+        
+        setAccounts(accountsResponse.data);
+        
+        // Highlight บัญชีที่มีการเปลี่ยนแปลง
+        if (affectedAccountIds.length > 0) {
+          setUpdatedAccounts(new Set(affectedAccountIds));
+          // เคลียร์ highlight หลังจาก 5 วินาที เพื่อให้เห็นการเปลี่ยนแปลงชัดเจน
+          setTimeout(() => {
+            setUpdatedAccounts(new Set());
+          }, 5000);
+        }
+        
+        console.log('Account data refreshed successfully');
+      } else {
+        console.error('Failed to refresh accounts:', accountsResponse);
+      }
+    } catch (error) {
+      console.error('Error refreshing account data:', error);
+    }
+  };
 
   /**
    * จัดการการส่งฟอร์ม
@@ -226,21 +291,66 @@ function NewTransactionPage() {
       let transactionData;
 
       if (activeTab === "transfer") {
+        if (!transferFromAccount || !transferToAccount) {
+          alert("กรุณาเลือกบัญชีต้นทางและปลายทาง");
+          return;
+        }
+        
         if (transferFromAccount === transferToAccount) {
           alert("บัญชีต้นทางและปลายทางต้องไม่ซ้ำกัน");
           return;
         }
+
+        // ตรวจสอบยอดเงินในบัญชีต้นทาง
+        const fromAccount = accounts.find(acc => acc.id === transferFromAccount);
+        if (fromAccount) {
+          const currentBalance = parseFloat(fromAccount.balance || '0');
+          const transferAmount = parseFloat(amount);
+          
+          console.log('Transfer validation:', {
+            account: fromAccount.name,
+            currentBalance,
+            transferAmount,
+            sufficient: currentBalance >= transferAmount
+          });
+          
+          if (currentBalance < transferAmount) {
+            alert(`ยอดเงินในบัญชี "${fromAccount.name}" ไม่เพียงพอ\nยอดคงเหลือ: ${currentBalance.toLocaleString()} บาท\nต้องการโอน: ${transferAmount.toLocaleString()} บาท`);
+            return;
+          }
+        }
         
-        // สำหรับ transfer ต้องสร้าง 2 transactions: ออกจากบัญชีหนึ่ง เข้าอีกบัญชีหนึ่ง
-        // แต่ในตอนนี้ยังทำแบบง่ายๆ ก่อน (อาจต้องปรับ backend ให้รองรับ transfer)
+        // สำหรับ transfer บันทึก account_id (บัญชีต้นทาง) และ related_account_id (บัญชีปลายทาง)
         transactionData = {
           amount: parseFloat(amount),
           description: description || "โอนเงิน",
           date: date,
-          account_id: transferFromAccount,
+          account_id: transferFromAccount, // บัญชีต้นทาง (เงินออก)
+          related_account_id: transferToAccount, // บัญชีปลายทาง (เงินเข้า)
           category_id: selectedCategory || categories.find(cat => cat.type?.name === "Transfer")?.id || categories[0]?.id,
         };
       } else {
+        // ตรวจสอบยอดเงินสำหรับรายจ่าย
+        if (activeTab === "expense") {
+          const selectedAccountData = accounts.find(acc => acc.id === selectedAccount);
+          if (selectedAccountData) {
+            const currentBalance = parseFloat(selectedAccountData.balance || '0');
+            const expenseAmount = parseFloat(amount);
+            
+            console.log('Expense validation:', {
+              account: selectedAccountData.name,
+              currentBalance,
+              expenseAmount,
+              sufficient: currentBalance >= expenseAmount
+            });
+            
+            if (currentBalance < expenseAmount) {
+              alert(`ยอดเงินในบัญชี "${selectedAccountData.name}" ไม่เพียงพอ\nยอดคงเหลือ: ${currentBalance.toLocaleString()} บาท\nต้องการจ่าย: ${expenseAmount.toLocaleString()} บาท`);
+              return;
+            }
+          }
+        }
+
         transactionData = {
           amount: parseFloat(amount),
           description,
@@ -253,10 +363,33 @@ function NewTransactionPage() {
       const response = await createTransaction(transactionData);
       
       if (response.success) {
+        // อัปเดตข้อมูลบัญชีหลังจากบันทึกธุรกรรมสำเร็จ
+        console.log('Transaction created successfully:', response.data);
+        console.log('Refreshing account data...');
+        
+        // กำหนดบัญชีที่ได้รับผลกระทบ
+        const affectedAccounts = activeTab === "transfer" 
+          ? [transferFromAccount, transferToAccount].filter(Boolean)
+          : [selectedAccount].filter(Boolean);
+        
+        console.log('Affected accounts:', affectedAccounts);
+        
+        await refreshAccountData(affectedAccounts);
+        
+        // รีเซ็ตฟอร์ม
+        setAmount('');
+        setDescription('');
+        setSelectedCategory('');
+        setSelectedAccount('');
+        setTransferFromAccount('');
+        setTransferToAccount('');
+        
         setShowToast(true);
+        
+        // ให้ผู้ใช้เห็นยอดเงินใหม่ก่อนไปหน้าอื่น
         setTimeout(() => {
           router.push("/transactions");
-        }, 1500);
+        }, 3000); // เพิ่มเวลาให้เห็นการเปลี่ยนแปลงชัด
       } else {
         throw new Error(response.error || 'เกิดข้อผิดพลาดในการสร้างธุรกรรม');
       }
@@ -308,7 +441,8 @@ function NewTransactionPage() {
                 </option>
                 {accounts.map((acc) => (
                   <option key={acc.id} value={acc.id}>
-                    {acc.name}
+                    {acc.name} (คงเหลือ: {parseFloat(acc.balance || '0').toLocaleString()} บาท)
+                    {updatedAccounts.has(acc.id) ? ' ✨ อัปเดตแล้ว' : ''}
                   </option>
                 ))}
               </select>
@@ -339,7 +473,8 @@ function NewTransactionPage() {
                 </option>
                 {accounts.map((acc) => (
                   <option key={acc.id} value={acc.id}>
-                    {acc.name}
+                    {acc.name} (คงเหลือ: {parseFloat(acc.balance || '0').toLocaleString()} บาท)
+                    {updatedAccounts.has(acc.id) ? ' ✨ อัปเดตแล้ว' : ''}
                   </option>
                 ))}
               </select>
@@ -412,7 +547,8 @@ function NewTransactionPage() {
               </option>
               {accounts.map((acc) => (
                 <option key={acc.id} value={acc.id}>
-                  {acc.name}
+                  {acc.name} (คงเหลือ: {parseFloat(acc.balance || '0').toLocaleString()} บาท)
+                  {updatedAccounts.has(acc.id) ? ' ✨ อัปเดตแล้ว' : ''}
                 </option>
               ))}
             </select>
@@ -445,9 +581,16 @@ function NewTransactionPage() {
         {/* --- Toast (ข้อความแจ้งเตือน) --- */}
         {showToast && (
         <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 w-full max-w-sm">
-          <div className="flex items-center justify-center p-4 rounded-lg shadow-lg bg-green-500 text-white animate-bounce">
-            <CheckCircleIcon />
-            <span className="ml-3 font-semibold">บันทึกรายการสำเร็จ!</span>
+          <div className="p-4 rounded-lg shadow-lg bg-green-500 text-white animate-bounce">
+            <div className="flex items-center mb-2">
+              <CheckCircleIcon />
+              <span className="ml-3 font-semibold">บันทึกรายการสำเร็จ!</span>
+            </div>
+            <div className="text-sm text-green-100">
+              💰 ยอดเงินในบัญชีได้รับการอัปเดตแล้ว
+              <br />
+              🔄 กำลังโหลดข้อมูลใหม่...
+            </div>
           </div>
         </div>
       )}
@@ -469,6 +612,16 @@ function NewTransactionPage() {
 
       {/* --- Main Content (Form) --- */}
       <main className="max-w-md mx-auto p-4">
+        {/* --- Loading State --- */}
+        {loading && (
+          <div className="mb-4 p-4 bg-blue-50 border-l-4 border-blue-400">
+            <div className="flex items-center">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+              <span className="ml-2 text-blue-700">กำลังโหลดข้อมูล...</span>
+            </div>
+          </div>
+        )}
+
         {/* --- Error State --- */}
         {error && (
           <div className="mb-4 p-4 bg-red-50 border-l-4 border-red-400">
