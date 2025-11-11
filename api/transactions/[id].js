@@ -447,24 +447,32 @@ const handler = async (req, res) => {
           const updatedTransaction = updateResult.rows[0];
 
           // ดึงข้อมูลเพิ่มเติมหลังอัปเดตเพื่อให้ response ครบถ้วน
-          const enrichedResult = await client.query(
-            `SELECT 
-              t.*,
-              a.name AS account_name,
-              a.amount AS account_balance,
-              ra.name AS related_account_name,
-              c.name AS category_name,
-              ty.name AS type_name
-             FROM transactions t
-             JOIN accounts a ON t.account_id = a.id
-             LEFT JOIN accounts ra ON t.related_account_id = ra.id
-             JOIN categories c ON t.category_id = c.id
-             JOIN types ty ON t.type_id = ty.id
-             WHERE t.id = $1`,
-            [updatedTransaction.id]
-          );
+          let enrichedTransaction = updatedTransaction;
+          try {
+            const enrichedResult = await client.query(
+              `SELECT 
+                t.*,
+                a.name AS account_name,
+                a.amount AS account_balance,
+                ra.name AS related_account_name,
+                c.name AS category_name,
+                ty.name AS type_name
+               FROM transactions t
+               JOIN accounts a ON t.account_id = a.id
+               LEFT JOIN accounts ra ON t.related_account_id = ra.id
+               JOIN categories c ON t.category_id = c.id
+               JOIN types ty ON t.type_id = ty.id
+               WHERE t.id = $1`,
+              [updatedTransaction.id]
+            );
 
-          const enrichedTransaction = enrichedResult.rows[0] || updatedTransaction;
+            if (enrichedResult.rows.length > 0) {
+              enrichedTransaction = enrichedResult.rows[0];
+            }
+          } catch (enrichError) {
+            console.warn('Failed to enrich transaction data:', enrichError);
+            // ใช้ข้อมูล updatedTransaction ที่มีอยู่แทน
+          }
 
           return res.json({
             success: true,
@@ -476,20 +484,20 @@ const handler = async (req, res) => {
               updated_at: enrichedTransaction.updated_at ? enrichedTransaction.updated_at.toString() : null,
               account: enrichedTransaction.account_id ? {
                 id: enrichedTransaction.account_id,
-                name: enrichedTransaction.account_name,
-                amount: enrichedTransaction.account_balance
+                name: enrichedTransaction.account_name || null,
+                amount: enrichedTransaction.account_balance || null
               } : null,
               category: enrichedTransaction.category_id ? {
                 id: enrichedTransaction.category_id,
-                name: enrichedTransaction.category_name
+                name: enrichedTransaction.category_name || null
               } : null,
               type: enrichedTransaction.type_id ? {
                 id: enrichedTransaction.type_id,
-                name: enrichedTransaction.type_name
+                name: enrichedTransaction.type_name || null
               } : null,
               related_account: enrichedTransaction.related_account_id ? {
                 id: enrichedTransaction.related_account_id,
-                name: enrichedTransaction.related_account_name
+                name: enrichedTransaction.related_account_name || null
               } : null
             }
           });
@@ -566,8 +574,14 @@ const handler = async (req, res) => {
             }
           });
         } catch (error) {
+          console.error('Update transaction error:', error);
           await client.query('ROLLBACK');
-          throw error;
+          return res.status(500).json({
+            success: false,
+            error: 'UPDATE_TRANSACTION_ERROR',
+            message: '❌ เกิดข้อผิดพลาดในการอัปเดตธุรกรรม กรุณาลองใหม่อีกครั้ง',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+          });
         }
       }
 
