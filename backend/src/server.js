@@ -93,19 +93,23 @@ app.use((error, req, res, next) => {
   });
 });
 
-// --- Start Server ---
-app.listen(PORT, '0.0.0.0', () => {
-  console.log('🚀 Money Management API Server Started!');
-  console.log('=====================================');
-  console.log(`📡 Port: ${PORT}`);
-  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔒 CORS Origin: ${process.env.CORS_ORIGIN || 'http://localhost:3000'}`);
-  console.log(`💾 Database: PostgreSQL (via Prisma)`);
-  console.log('=====================================');
-  console.log(`🔗 Local: http://localhost:${PORT}/health`);
-  console.log(`� Network: http://192.168.1.44:${PORT}/health`);
-  console.log(`📋 API Base URL: http://192.168.1.44:${PORT}/api`);
-  console.log('=====================================');
-});
+// --- Start Server (only in development) ---
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log('🚀 Money Management API Server Started!');
+    console.log('=====================================');
+    console.log(`📡 Port: ${PORT}`);
+    console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🔒 CORS Origin: ${process.env.CORS_ORIGIN || 'http://localhost:3000'}`);
+    console.log(`💾 Database: PostgreSQL (via Prisma)`);
+    console.log('=====================================');
+    console.log(`🔗 Local: http://localhost:${PORT}/health`);
+    console.log(`🌐 Network: http://192.168.1.44:${PORT}/health`);
+    console.log(`📋 API Base URL: http://192.168.1.44:${PORT}/api`);
+    console.log('=====================================');
+  });
+} else {
+  console.log('🚀 Money Management API deployed on serverless (Vercel)');
+}
 
 module.exports = app;
