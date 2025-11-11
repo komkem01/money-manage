@@ -114,19 +114,48 @@ export const getAllCategories = async (): Promise<CategoryResponse> => {
 };
 
 /**
- * Get categories by type
+ * Get categories by type (filter จาก getAllCategories)
  */
 export const getCategoriesByType = async (typeId: string): Promise<CategoryResponse> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/categories/type/${typeId}`, {
-      method: 'GET',
-      headers: getAuthHeader(),
-    });
+    console.log('Getting categories by type:', typeId);
+    const allCategoriesResponse = await getAllCategories();
+    
+    if (!allCategoriesResponse.success) {
+      console.error('Failed to get all categories:', allCategoriesResponse.message);
+      return allCategoriesResponse;
+    }
 
-    return await handleResponse(response);
+    // API /categories ตอนนี้ return { data: Array, grouped: Object }
+    const responseData = allCategoriesResponse.data as any;
+    
+    // ใช้ data array และ filter ตาม type_id
+    if (responseData && Array.isArray(responseData)) {
+      const filteredCategories = responseData.filter(
+        (category: Category) => category.type_id === typeId
+      );
+      
+      console.log('Filtered categories:', filteredCategories);
+      
+      return {
+        success: true,
+        data: filteredCategories,
+        message: allCategoriesResponse.message
+      };
+    }
+
+    // Fallback ถ้า format ไม่ตรง
+    console.error('Unexpected data format from getAllCategories:', responseData);
+    return {
+      success: false,
+      message: 'Unexpected data format from server'
+    };
   } catch (error) {
     console.error('Get categories by type error:', error);
-    throw error;
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'Failed to fetch categories by type'
+    };
   }
 };
 

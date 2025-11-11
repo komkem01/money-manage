@@ -69,27 +69,6 @@ const handler = async (req, res) => {
     return;
   }
 
-  // ถ้าเป็น path /api/types - ไม่ต้องใช้ authentication
-  if (req.url === '/api/types' || req.query.types === 'true') {
-    const client = await getClient();
-    try {
-      const result = await client.query('SELECT * FROM types ORDER BY name ASC');
-      return res.json({
-        success: true,
-        data: result.rows
-      });
-    } catch (error) {
-      console.error('Types API error:', error);
-      return res.status(500).json({
-        success: false,
-        error: 'INTERNAL_SERVER_ERROR',
-        message: '❌ เกิดข้อผิดพลาดภายในระบบ'
-      });
-    } finally {
-      await client.end();
-    }
-  }
-
   return authenticate(async (req, res) => {
     const userId = req.user.id;
     const client = req.client;
