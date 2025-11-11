@@ -70,6 +70,10 @@ interface ApiResponse<T> {
   data?: T;
   message?: string;
   error?: string;
+  errorCode?: string;
+  field?: string;
+  status?: number;
+  details?: unknown;
 }
 
 // Interface สำหรับ Pagination
@@ -84,6 +88,63 @@ interface PaginatedResponse<T> {
   };
   message?: string;
   error?: string;
+  errorCode?: string;
+  field?: string;
+  status?: number;
+  details?: unknown;
+}
+
+interface ApiErrorDetails {
+  error?: string;
+  message?: string;
+  field?: string;
+  details?: unknown;
+  [key: string]: unknown;
+}
+
+function buildErrorResponse<T>(
+  error: Error,
+  options: {
+    status?: number;
+    payload?: ApiErrorDetails | null;
+  } = {}
+): ApiResponse<T> {
+  const payload = options.payload ?? {};
+  return {
+    success: false,
+    error: (payload.message as string) || error.message || 'Unknown error',
+    errorCode: payload.error as string | undefined,
+    field: payload.field as string | undefined,
+    details: payload.details,
+    status: options.status,
+  };
+}
+
+function buildPaginatedErrorResponse<T>(
+  error: Error,
+  options: {
+    status?: number;
+    payload?: ApiErrorDetails | null;
+  } = {}
+): PaginatedResponse<T> {
+  const payload = options.payload ?? {};
+  return {
+    success: false,
+    error: (payload.message as string) || error.message || 'Unknown error',
+    errorCode: payload.error as string | undefined,
+    field: payload.field as string | undefined,
+    details: payload.details,
+    status: options.status,
+  };
+}
+
+async function parseJsonSafely(response: Response): Promise<ApiErrorDetails | null> {
+  try {
+    return await response.json();
+  } catch (error) {
+    console.warn('Failed to parse JSON response:', error);
+    return null;
+  }
 }
 
 /**
@@ -117,27 +178,33 @@ export async function getAllTransactions(
       },
     });
 
-    if (!response.ok) {
+    const payload = await parseJsonSafely(response);
+
+    if (!response.ok || payload?.success === false) {
       if (response.status === 401) {
-        throw new Error('Authentication failed. Please login again.');
+        return buildPaginatedErrorResponse<Transaction>(
+          new Error(payload?.message as string || 'Authentication failed. Please login again.'),
+          { status: response.status, payload }
+        );
       }
-      throw new Error(`HTTP error! status: ${response.status}`);
+
+      return buildPaginatedErrorResponse<Transaction>(
+        new Error(payload?.message as string || `HTTP error! status: ${response.status}`),
+        { status: response.status, payload }
+      );
     }
 
-    const data = await response.json();
-    console.log('Transactions response:', data);
+    console.log('Transactions response:', payload);
 
     return {
       success: true,
-      data: data.data || [],
-      pagination: data.pagination,
+      data: (payload?.data as Transaction[]) || [],
+      pagination: payload?.pagination as PaginatedResponse<Transaction>['pagination'],
+      message: payload?.message as string | undefined,
     };
   } catch (error: any) {
     console.error('Get all transactions error:', error);
-    return {
-      success: false,
-      error: error.message || 'Failed to fetch transactions',
-    };
+    return buildPaginatedErrorResponse<Transaction>(error instanceof Error ? error : new Error(String(error)));
   }
 }
 
@@ -162,29 +229,38 @@ export async function getTransactionById(id: string): Promise<ApiResponse<Transa
       },
     });
 
-    if (!response.ok) {
+    const payload = await parseJsonSafely(response);
+
+    if (!response.ok || payload?.success === false) {
       if (response.status === 401) {
-        throw new Error('Authentication failed. Please login again.');
+        return buildErrorResponse<Transaction>(
+          new Error(payload?.message as string || 'Authentication failed. Please login again.'),
+          { status: response.status, payload }
+        );
       }
       if (response.status === 404) {
-        throw new Error('Transaction not found');
+        return buildErrorResponse<Transaction>(
+          new Error(payload?.message as string || 'Transaction not found'),
+          { status: response.status, payload }
+        );
       }
-      throw new Error(`HTTP error! status: ${response.status}`);
+
+      return buildErrorResponse<Transaction>(
+        new Error(payload?.message as string || `HTTP error! status: ${response.status}`),
+        { status: response.status, payload }
+      );
     }
 
-    const data = await response.json();
-    console.log('Transaction response:', data);
+    console.log('Transaction response:', payload);
 
     return {
       success: true,
-      data: data.data,
+      data: payload?.data as Transaction,
+      message: payload?.message as string | undefined,
     };
   } catch (error: any) {
     console.error('Get transaction by ID error:', error);
-    return {
-      success: false,
-      error: error.message || 'Failed to fetch transaction',
-    };
+    return buildErrorResponse<Transaction>(error instanceof Error ? error : new Error(String(error)));
   }
 }
 
@@ -218,28 +294,32 @@ export async function createTransaction(transactionData: {
       body: JSON.stringify(transactionData),
     });
 
-    if (!response.ok) {
+    const payload = await parseJsonSafely(response);
+
+    if (!response.ok || payload?.success === false) {
       if (response.status === 401) {
-        throw new Error('Authentication failed. Please login again.');
+        return buildErrorResponse<Transaction>(
+          new Error(payload?.message as string || 'Authentication failed. Please login again.'),
+          { status: response.status, payload }
+        );
       }
-      const errorData = await response.json();
-      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+
+      return buildErrorResponse<Transaction>(
+        new Error(payload?.message as string || `HTTP error! status: ${response.status}`),
+        { status: response.status, payload }
+      );
     }
 
-    const data = await response.json();
-    console.log('Create transaction response:', data);
+    console.log('Create transaction response:', payload);
 
     return {
       success: true,
-      data: data.data,
-      message: data.message,
+      data: payload?.data as Transaction,
+      message: payload?.message as string | undefined,
     };
   } catch (error: any) {
     console.error('Create transaction error:', error);
-    return {
-      success: false,
-      error: error.message || 'Failed to create transaction',
-    };
+    return buildErrorResponse<Transaction>(error instanceof Error ? error : new Error(String(error)));
   }
 }
 
@@ -268,7 +348,7 @@ export async function updateTransaction(
     console.log('Updating transaction:', id, transactionData);
 
     const response = await fetch(url, {
-      method: 'PUT',
+      method: 'PATCH',
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
@@ -276,31 +356,38 @@ export async function updateTransaction(
       body: JSON.stringify(transactionData),
     });
 
-    if (!response.ok) {
+    const payload = await parseJsonSafely(response);
+
+    if (!response.ok || payload?.success === false) {
       if (response.status === 401) {
-        throw new Error('Authentication failed. Please login again.');
+        return buildErrorResponse<Transaction>(
+          new Error(payload?.message as string || 'Authentication failed. Please login again.'),
+          { status: response.status, payload }
+        );
       }
       if (response.status === 404) {
-        throw new Error('Transaction not found');
+        return buildErrorResponse<Transaction>(
+          new Error(payload?.message as string || 'Transaction not found'),
+          { status: response.status, payload }
+        );
       }
-      const errorData = await response.json();
-      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+
+      return buildErrorResponse<Transaction>(
+        new Error(payload?.message as string || `HTTP error! status: ${response.status}`),
+        { status: response.status, payload }
+      );
     }
 
-    const data = await response.json();
-    console.log('Update transaction response:', data);
+    console.log('Update transaction response:', payload);
 
     return {
       success: true,
-      data: data.data,
-      message: data.message,
+      data: payload?.data as Transaction,
+      message: payload?.message as string | undefined,
     };
   } catch (error: any) {
     console.error('Update transaction error:', error);
-    return {
-      success: false,
-      error: error.message || 'Failed to update transaction',
-    };
+    return buildErrorResponse<Transaction>(error instanceof Error ? error : new Error(String(error)));
   }
 }
 
@@ -325,30 +412,37 @@ export async function deleteTransaction(id: string): Promise<ApiResponse<null>> 
       },
     });
 
-    if (!response.ok) {
+    const payload = await parseJsonSafely(response);
+
+    if (!response.ok || payload?.success === false) {
       if (response.status === 401) {
-        throw new Error('Authentication failed. Please login again.');
+        return buildErrorResponse<null>(
+          new Error(payload?.message as string || 'Authentication failed. Please login again.'),
+          { status: response.status, payload }
+        );
       }
       if (response.status === 404) {
-        throw new Error('Transaction not found');
+        return buildErrorResponse<null>(
+          new Error(payload?.message as string || 'Transaction not found'),
+          { status: response.status, payload }
+        );
       }
-      const errorData = await response.json();
-      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+
+      return buildErrorResponse<null>(
+        new Error(payload?.message as string || `HTTP error! status: ${response.status}`),
+        { status: response.status, payload }
+      );
     }
 
-    const data = await response.json();
-    console.log('Delete transaction response:', data);
+    console.log('Delete transaction response:', payload);
 
     return {
       success: true,
       data: null,
-      message: data.message,
+      message: payload?.message as string | undefined,
     };
   } catch (error: any) {
     console.error('Delete transaction error:', error);
-    return {
-      success: false,
-      error: error.message || 'Failed to delete transaction',
-    };
+    return buildErrorResponse<null>(error instanceof Error ? error : new Error(String(error)));
   }
 }

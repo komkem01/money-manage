@@ -1,209 +1,415 @@
-# 🎉 Money Management - Vercel Serverless EditionThis is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 💰 Money Management System# 🎉 Money Management - Vercel Serverless EditionThis is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 
 
-โปรเจกต์จัดการเงินส่วนตัวที่ปรับใหม่ให้ทำงานบน **Vercel Serverless** ด้วย **PostgreSQL (Supabase)** แทน Prisma ORM## Getting Started
+โปรเจกต์จัดการการเงินส่วนบุคคลที่พร้อมสำหรับการใช้งานบน **Vercel Serverless** โดยใช้ **Next.js 16**, **React 19**, และ **PostgreSQL (Supabase)** พร้อม RESTful API ที่ออกแบบตามแนวทางที่ดีที่สุดในเวอร์ชัน 2.0
 
 
 
-## 🚀 การเปลี่ยนแปลงสำคัญFirst, run the development server:
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/your-username/money-manage)โปรเจกต์จัดการเงินส่วนตัวที่ปรับใหม่ให้ทำงานบน **Vercel Serverless** ด้วย **PostgreSQL (Supabase)** แทน Prisma ORM## Getting Started
 
 
 
-### ✅ ไม่ใช้ Prisma แล้ว```bash
-
-- เปลี่ยนจาก Prisma ORM มาใช้ **pg (node-postgres)** เชื่อมต่อ PostgreSQL โดยตรงnpm run dev
-
-- เขียน SQL queries เอง = ประสิทธิภาพสูงขึ้น# or
-
-- ไม่มีปัญหา Prisma Client generation บน Vercel อีกต่อไปyarn dev
-
-# or
-
-### ✅ Serverless Architecturepnpm dev
-
-- API ทั้งหมดเป็น **Vercel Serverless Functions**# or
-
-- แต่ละ endpoint เป็นฟังก์ชันอิสระbun dev
-
-- รองรับ auto-scaling และ cold start ที่เร็ว```
+---
 
 
 
-### ✅ Database: Supabase PostgreSQLOpen [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## ✨ Highlights## 🚀 การเปลี่ยนแปลงสำคัญFirst, run the development server:
 
-- ใช้ Supabase PostgreSQL Pooler
+- 🔐 JWT Authentication
+
+- 💳 Account Management พร้อมคำนวณยอดเงินอัตโนมัติ
+
+- 💸 Transaction Tracking (Income, Expense, Transfer)
+
+- 📊 Categories & Types พร้อมตรวจสอบชื่อซ้ำแบบ case-insensitive### ✅ ไม่ใช้ Prisma แล้ว```bash
+
+- 🔄 PATCH Method สำหรับอัปเดต (partial updates)
+
+- ⚠️ Error messages พร้อม emoji indicators (✅ / ❌ / ⚠️) และ HTTP status code ที่ถูกต้อง- เปลี่ยนจาก Prisma ORM มาใช้ **pg (node-postgres)** เชื่อมต่อ PostgreSQL โดยตรงnpm run dev
+
+- 🗑️ Soft Delete และ Rollback เมื่อเกิดข้อผิดพลาด
+
+- 🚀 Deploy บน Vercel Serverless ได้ทันที- เขียน SQL queries เอง = ประสิทธิภาพสูงขึ้น# or
+
+
+
+---- ไม่มีปัญหา Prisma Client generation บน Vercel อีกต่อไปyarn dev
+
+
+
+## 🚀 What's New in v2.0# or
+
+### Serverless Architecture
+
+- API แยกเป็น **Vercel Serverless Functions** (`api/*`)### ✅ Serverless Architecturepnpm dev
+
+- ใช้ **client pattern** สำหรับ `pg` library (ไม่ใช้ Pool) ป้องกัน connection leak
+
+- รองรับ Auto-scaling และ cold start เร็ว- API ทั้งหมดเป็น **Vercel Serverless Functions**# or
+
+
+
+### Native PostgreSQL (No Prisma)- แต่ละ endpoint เป็นฟังก์ชันอิสระbun dev
+
+- ใช้ `pg` (node-postgres) เชื่อมต่อ Supabase โดยตรง
+
+- เขียน SQL ด้วยตนเองเพื่อควบคุม logic ได้ละเอียด- รองรับ auto-scaling และ cold start ที่เร็ว```
+
+- ไม่เจอปัญหา Prisma Client บน Vercel อีกต่อไป
+
+
+
+### RESTful API Best Practices
+
+- ใช้ `PATCH` สำหรับ update### ✅ Database: Supabase PostgreSQLOpen [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+
+- HTTP Status Codes: `200`, `201`, `400`, `401`, `404`, `409`, `500`
+
+- Error response มี `error`, `message`, `field`, `details`- ใช้ Supabase PostgreSQL Pooler
+
+- Duplicate validation ใช้ `LOWER()` ป้องกันชื่อซ้ำ
 
 - Connection pooling สำหรับประสิทธิภาพYou can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
+รายละเอียด API ทั้งหมดอยู่ใน [`API_DOCUMENTATION.md`](./API_DOCUMENTATION.md)
+
 - รองรับ SSL connections
+
+---
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-## 📁 โครงสร้างโปรเจกต์
+## 📁 Project Structure
 
-## Learn More
+```## 📁 โครงสร้างโปรเจกต์
 
-```
+money-manage/
 
-money-manage/To learn more about Next.js, take a look at the following resources:
+├── api/                      # 🔥 Vercel Serverless Functions## Learn More
 
-├── api/                    # Vercel Serverless Functions
+│   ├── login.js              # POST /api/login
 
-│   ├── login.js           # POST /api/login- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+│   ├── register.js           # POST /api/register```
 
-│   ├── register.js        # POST /api/register- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+│   ├── types.js              # GET /api/types
 
-│   ├── accounts.js        # GET, POST /api/accounts
+│   ├── accounts/money-manage/To learn more about Next.js, take a look at the following resources:
 
-│   ├── categories.js      # GET, POST /api/categoriesYou can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+│   │   ├── index.js          # GET, POST /api/accounts
 
-│   ├── transactions.js    # GET, POST /api/transactions
+│   │   └── [id].js           # GET, PATCH, DELETE /api/accounts/[id]├── api/                    # Vercel Serverless Functions
 
-│   └── types.js           # GET /api/types## Deploy on Vercel
+│   ├── categories/
 
-├── app/                   # Next.js App Router
+│   │   ├── index.js          # GET, POST /api/categories│   ├── login.js           # POST /api/login- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
 
-├── components/            # React ComponentsThe easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+│   │   └── [id].js           # GET, PATCH, DELETE /api/categories/[id]
 
-├── lib/                   # Frontend API Client
+│   └── transactions/│   ├── register.js        # POST /api/register- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
-├── .env                   # Environment VariablesCheck out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+│       ├── index.js          # GET, POST /api/transactions
 
-├── .env.example           # Environment Template
-├── DEPLOYMENT.md          # คู่มือการ Deploy
+│       └── [id].js           # GET, PATCH, DELETE /api/transactions/[id]│   ├── accounts.js        # GET, POST /api/accounts
+
+├── app/                      # Next.js App Router
+
+│   ├── page.tsx              # Dashboard landing│   ├── categories.js      # GET, POST /api/categoriesYou can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+
+│   ├── history/page.tsx      # Transaction history (pagination)
+
+│   ├── accounts/...          # Account pages│   ├── transactions.js    # GET, POST /api/transactions
+
+│   ├── transactions/...      # Transaction create/edit
+
+│   └── ...│   └── types.js           # GET /api/types## Deploy on Vercel
+
+├── components/               # Reusable React components
+
+├── lib/                      # Frontend API clients├── app/                   # Next.js App Router
+
+│   ├── auth.ts
+
+│   ├── accounts.ts├── components/            # React ComponentsThe easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+
+│   ├── categories.ts
+
+│   ├── transactions.ts├── lib/                   # Frontend API Client
+
+│   └── types.ts
+
+├── prisma/                   # Prisma schema (เก็บไว้เป็น reference)├── .env                   # Environment VariablesCheck out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+├── public/
+
+└── package.json├── .env.example           # Environment Template
+
+```├── DEPLOYMENT.md          # คู่มือการ Deploy
+
 └── package.json
-```
 
-## 🔧 การติดตั้ง
+---```
 
-### 1. Clone Repository
 
-```bash
-git clone https://github.com/your-username/money-manage.git
+
+## 🛠 Installation## 🔧 การติดตั้ง
+
+
+
+### Prerequisites### 1. Clone Repository
+
+- Node.js 18+
+
+- PostgreSQL database (แนะนำ Supabase)```bash
+
+- Vercel account (สำหรับ deploy)git clone https://github.com/your-username/money-manage.git
+
 cd money-manage
-```
 
-### 2. ติดตั้ง Dependencies
-
-```bash
-npm install
-```
-
-### 3. ตั้งค่า Environment Variables
-
-สร้างไฟล์ `.env` จาก `.env.example`:
+### 1. Clone & Install```
 
 ```bash
-cp .env.example .env
+
+git clone https://github.com/your-username/money-manage.git### 2. ติดตั้ง Dependencies
+
+cd money-manage
+
+npm install```bash
+
+```npm install
+
 ```
 
-แก้ไขไฟล์ `.env`:
+### 2. Environment Variables
 
-```env
-DATABASE_URL=postgresql://your-database-url
+คัดลอกไฟล์ตัวอย่างและกำหนดค่า### 3. ตั้งค่า Environment Variables
+
+```bash
+
+cp .env.example .envสร้างไฟล์ `.env` จาก `.env.example`:
+
+```
+
+กรอกค่าใน `.env````bash
+
+```envcp .env.example .env
+
+DATABASE_URL=postgresql://postgres.xxxx:password@aws-1-region.pooler.supabase.com:6543/postgres```
+
 JWT_SECRET=your-super-secret-key
-JWT_EXPIRES_IN=7d
-NODE_ENV=production
+
+JWT_EXPIRES_IN=7dแก้ไขไฟล์ `.env`:
+
+NODE_ENV=development
+
+NEXT_PUBLIC_API_URL=https://your-deploy.vercel.app/api   # optional```env
+
+```DATABASE_URL=postgresql://your-database-url
+
+JWT_SECRET=your-super-secret-key
+
+### 3. DevelopmentJWT_EXPIRES_IN=7d
+
+```bashNODE_ENV=production
+
+npm run dev```
+
 ```
 
-### 4. รันในโหมด Development
+ เปิด [http://localhost:3000](http://localhost:3000)### 4. รันในโหมด Development
 
-```bash
-npm run dev
+
+
+### 4. Deploy (Vercel CLI)```bash
+
+```bashnpm run dev
+
+npm install -g vercel```
+
+vercel
+
+vercel --prodเปิดเบราว์เซอร์ที่ [http://localhost:3000](http://localhost:3000)
+
 ```
-
-เปิดเบราว์เซอร์ที่ [http://localhost:3000](http://localhost:3000)
 
 ## 🚢 Deploy ไปยัง Vercel
 
+---
+
 ### วิธีที่ 1: ผ่าน Vercel CLI
 
-```bash
-# ติดตั้ง Vercel CLI
-npm install -g vercel
+## 📚 API Quick Reference
 
-# Deploy
+ตัวอย่างทั้งหมดอยู่ใน [`API_DOCUMENTATION.md`](./API_DOCUMENTATION.md)```bash
+
+# ติดตั้ง Vercel CLI
+
+```bashnpm install -g vercel
+
+# Register
+
+POST /api/register# Deploy
+
 vercel
-```
+
+# Login```
+
+POST /api/login
 
 ### วิธีที่ 2: ผ่าน GitHub Integration
 
-1. Push code ไป GitHub repository
-2. เข้า [Vercel Dashboard](https://vercel.com/dashboard)
-3. คลิก "Import Project"
-4. เลือก repository ของคุณ
-5. ตั้งค่า Environment Variables:
+# Accounts
+
+GET    /api/accounts1. Push code ไป GitHub repository
+
+POST   /api/accounts2. เข้า [Vercel Dashboard](https://vercel.com/dashboard)
+
+GET    /api/accounts/:id3. คลิก "Import Project"
+
+PATCH  /api/accounts/:id4. เลือก repository ของคุณ
+
+DELETE /api/accounts/:id5. ตั้งค่า Environment Variables:
+
    - `DATABASE_URL`
-   - `JWT_SECRET`
-   - `JWT_EXPIRES_IN`
-   - `NODE_ENV=production`
-6. คลิก "Deploy"
 
-## 📝 API Endpoints
+# Categories   - `JWT_SECRET`
 
-### Authentication
+GET    /api/categories   - `JWT_EXPIRES_IN`
 
-#### Register
-```bash
-POST /api/register
+POST   /api/categories   - `NODE_ENV=production`
+
+GET    /api/categories/:id6. คลิก "Deploy"
+
+PATCH  /api/categories/:id
+
+DELETE /api/categories/:id## 📝 API Endpoints
+
+
+
+# Transactions### Authentication
+
+GET    /api/transactions?page=1&limit=10
+
+POST   /api/transactions#### Register
+
+GET    /api/transactions/:id```bash
+
+PATCH  /api/transactions/:idPOST /api/register
+
+DELETE /api/transactions/:idContent-Type: application/json
+
+
+
+# Types{
+
+GET    /api/types  "firstname": "John",
+
+```  "lastname": "Doe",
+
+  "email": "john@example.com",
+
+---  "password": "password123"
+
+}
+
+## 🧠 Best Practices```
+
+- ใช้ `PATCH` สำหรับอัปเดตข้อมูล (ส่งเฉพาะฟิลด์ที่ต้องการเปลี่ยน)
+
+- ตรวจสอบ `error` และ `errorCode` ใน response เพื่อแสดงข้อความที่เหมาะสม#### Login
+
+- สำหรับธุรกรรม (Transactions): ระบบจะ rollback อัตโนมัติถ้ามีข้อผิดพลาด เพื่อรักษายอดเงินให้ถูกต้อง```bash
+
+- การลบเป็นแบบ Soft delete (`deleted_at`) เพื่อความปลอดภัยของข้อมูลPOST /api/login
+
 Content-Type: application/json
 
-{
-  "firstname": "John",
-  "lastname": "Doe",
-  "email": "john@example.com",
-  "password": "password123"
-}
-```
+ตัวอย่างการจัดการ Error:
 
-#### Login
-```bash
-POST /api/login
-Content-Type: application/json
+```typescript{
 
-{
-  "email": "john@example.com",
-  "password": "password123"
-}
-```
+const response = await createTransaction(payload);  "email": "john@example.com",
 
-### Accounts
+if (!response.success) {  "password": "password123"
 
-#### Get All Accounts
-```bash
+  if (response.errorCode === 'INSUFFICIENT_BALANCE') {}
+
+    showBalanceAlert(response.details);```
+
+  } else {
+
+    toast.error(response.error ?? 'เกิดข้อผิดพลาด');### Accounts
+
+  }
+
+}#### Get All Accounts
+
+``````bash
+
 GET /api/accounts
-Authorization: Bearer {token}
+
+---Authorization: Bearer {token}
+
 ```
 
-#### Create Account
-```bash
-POST /api/accounts
-Authorization: Bearer {token}
-Content-Type: application/json
+## 🐛 Troubleshooting
+
+| ปัญหา | วิธีแก้ |#### Create Account
+
+|-------|----------|```bash
+
+| `Authentication token not found` | ตรวจสอบว่ามีการล็อกอินและเก็บ JWT ใน localStorage หรือไม่ |POST /api/accounts
+
+| `⚠️ ยอดเงินในบัญชีไม่เพียงพอ` | ตรวจสอบจำนวนเงินที่ป้อน และยอดเงินคงเหลือในบัญชี |Authorization: Bearer {token}
+
+| `❌ Method PATCH ไม่ได้รับอนุญาต` | ตรวจสอบว่าเรียก endpoint ถูก path และใช้ method ถูกต้อง |Content-Type: application/json
+
+| เชื่อมต่อฐานข้อมูลไม่ได้ | ตรวจสอบ `DATABASE_URL`, SSL, และสถานะของ Supabase |
 
 {
-  "name": "กระเป๋าเงิน",
+
+---  "name": "กระเป๋าเงิน",
+
   "initial_balance": 1000
-}
-```
 
-### Categories
+## 🧾 Changelog}
 
-```bash
-GET /api/categories
-Authorization: Bearer {token}
-```
+ดูรายละเอียดทั้งหมดที่ [`CHANGELOG.md`](./CHANGELOG.md)```
+
+
+
+---### Categories
+
+
+
+## 🤝 Contributing```bash
+
+1. Fork projectGET /api/categories
+
+2. สร้าง branch `feature/your-feature`Authorization: Bearer {token}
+
+3. Commit & push```
+
+4. เปิด Pull Request
 
 ### Types
 
-```bash
-GET /api/types
-```
-
-### Transactions
+---
 
 ```bash
+
+## 📄 LicenseGET /api/types
+
+MIT```
+
+
+
+---### Transactions
+
+
+
+**Built with ❤️ on Next.js, Vercel, และ Supabase**```bash
+
 GET /api/transactions?page=1&limit=10
 Authorization: Bearer {token}
 ```
