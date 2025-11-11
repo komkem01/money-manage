@@ -9,21 +9,24 @@ const setCORS = (res) => {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 };
 
-// Import Prisma
-let prisma;
-const getPrisma = async () => {
-  if (!prisma) {
-    const { PrismaClient } = require('@prisma/client');
-    prisma = new PrismaClient({
-      datasources: {
-        db: {
-          url: process.env.DATABASE_URL
-        }
-      }
-    });
-  }
-  return prisma;
-};
+// Import Prisma with global instance for serverless
+const { PrismaClient } = require('@prisma/client');
+
+// Global Prisma instance to prevent multiple connections in serverless
+const globalForPrisma = globalThis;
+
+const prisma = globalForPrisma.prisma || new PrismaClient({
+  datasources: {
+    db: {
+      url: process.env.DATABASE_URL
+    }
+  },
+  log: ['error', 'warn']
+});
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = prisma;
+}
 
 export default async function handler(req, res) {
   setCORS(res);
@@ -49,10 +52,8 @@ export default async function handler(req, res) {
       });
     }
 
-    const db = await getPrisma();
-
     // Find user
-    const user = await db.users.findFirst({
+    const user = await prisma.users.findFirst({
       where: { 
         email: email.toLowerCase(),
         deleted_at: null,

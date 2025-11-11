@@ -9,21 +9,24 @@ const setCORS = (res) => {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 };
 
-// Import Prisma (ใช้ dynamic import เพื่อป้องกัน error)
-let prisma;
-const getPrisma = async () => {
-  if (!prisma) {
-    const { PrismaClient } = require('@prisma/client');
-    prisma = new PrismaClient({
-      datasources: {
-        db: {
-          url: process.env.DATABASE_URL
-        }
-      }
-    });
-  }
-  return prisma;
-};
+// Import Prisma with global instance for serverless
+const { PrismaClient } = require('@prisma/client');
+
+// Global Prisma instance to prevent multiple connections in serverless
+const globalForPrisma = globalThis;
+
+const prisma = globalForPrisma.prisma || new PrismaClient({
+  datasources: {
+    db: {
+      url: process.env.DATABASE_URL
+    }
+  },
+  log: ['error', 'warn']
+});
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = prisma;
+}
 
 export default async function handler(req, res) {
   setCORS(res);
@@ -61,10 +64,8 @@ export default async function handler(req, res) {
       });
     }
 
-    const db = await getPrisma();
-
     // ตรวจสอบว่ามี email นี้อยู่ในระบบแล้วหรือไม่
-    const existingUser = await db.users.findFirst({
+    const existingUser = await prisma.users.findFirst({
       where: { 
         email: email.toLowerCase(),
         deleted_at: null,
@@ -84,7 +85,7 @@ export default async function handler(req, res) {
 
     // Create user
     const currentTime = BigInt(Date.now());
-    const newUser = await db.users.create({
+    const newUser = await prisma.users.create({
       data: {
         firstname: firstname?.trim() || null,
         lastname: lastname?.trim() || null,
