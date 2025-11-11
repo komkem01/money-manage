@@ -133,8 +133,25 @@ const handler = async (req, res) => {
         const { amount, description, date, transaction_date, account_id, category_id, related_account_id } = req.body;
         const transactionDate = date || transaction_date;
 
+        console.log('Creating transaction - debug info:', {
+          amount, 
+          description, 
+          date, 
+          transaction_date,
+          transactionDate, 
+          account_id, 
+          category_id, 
+          related_account_id,
+          amountType: typeof amount,
+          dateType: typeof transactionDate,
+          parsedAmount: parseFloat(amount),
+          dateValue: transactionDate ? new Date(transactionDate) : 'no date',
+          isDateValid: transactionDate ? !isNaN(new Date(transactionDate).getTime()) : 'no date to validate'
+        });
+
         // Validation
-        if (!amount || amount <= 0) {
+        const amountValue = parseFloat(amount);
+        if (!amount || isNaN(amountValue) || amountValue <= 0) {
           return res.status(400).json({
             success: false,
             error: 'VALIDATION_ERROR',
@@ -159,6 +176,19 @@ const handler = async (req, res) => {
             message: '❌ กรุณาเลือกหมวดหมู่',
             field: 'category_id'
           });
+        }
+
+        // Validate date if provided
+        if (transactionDate) {
+          const dateValue = new Date(transactionDate);
+          if (isNaN(dateValue.getTime())) {
+            return res.status(400).json({
+              success: false,
+              error: 'VALIDATION_ERROR',
+              message: '❌ วันที่ไม่ถูกต้อง',
+              field: 'date'
+            });
+          }
         }
 
         await client.query('BEGIN');
@@ -260,7 +290,23 @@ const handler = async (req, res) => {
           // สร้างธุรกรรม
           const transactionAmount = Math.abs(parseFloat(amount));
           const now = Date.now().toString();
-          const txDate = transactionDate ? new Date(transactionDate).getTime().toString() : now;
+          
+          // Validate and convert transaction date
+          let txDate = now;
+          if (transactionDate) {
+            const dateValue = new Date(transactionDate);
+            if (isNaN(dateValue.getTime())) {
+              console.error('Invalid transaction date:', transactionDate);
+              await client.query('ROLLBACK');
+              return res.status(400).json({ 
+                success: false,
+                error: 'INVALID_DATE', 
+                message: '❌ วันที่ของธุรกรรมไม่ถูกต้อง',
+                field: 'date' 
+              });
+            }
+            txDate = dateValue.getTime().toString();
+          }
 
           const newTransactionResult = await client.query(
             `INSERT INTO transactions (amount, description, date, user_id, type_id, account_id, category_id, related_account_id, created_at, updated_at)

@@ -274,16 +274,31 @@ function NewTransactionPage() {
       setIsSubmitting(true);
       setError('');
 
+      // Validate required fields
+      if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
+        alert("กรุณาใส่จำนวนเงินที่ถูกต้อง");
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (!date) {
+        alert("กรุณาเลือกวันที่");
+        setIsSubmitting(false);
+        return;
+      }
+
       let transactionData;
 
       if (activeTab === "transfer") {
         if (!transferFromAccount || !transferToAccount) {
           alert("กรุณาเลือกบัญชีต้นทางและปลายทาง");
+          setIsSubmitting(false);
           return;
         }
         
         if (transferFromAccount === transferToAccount) {
           alert("บัญชีต้นทางและปลายทางต้องไม่ซ้ำกัน");
+          setIsSubmitting(false);
           return;
         }
 
@@ -302,15 +317,24 @@ function NewTransactionPage() {
           
           if (currentBalance < transferAmount) {
             alert(`ยอดเงินในบัญชี "${fromAccount.name}" ไม่เพียงพอ\nยอดคงเหลือ: ${currentBalance.toLocaleString()} บาท\nต้องการโอน: ${transferAmount.toLocaleString()} บาท`);
+            setIsSubmitting(false);
             return;
           }
         }
         
+        // Validate and convert date
+        const dateValue = new Date(date);
+        if (isNaN(dateValue.getTime())) {
+          alert("วันที่ไม่ถูกต้อง กรุณาเลือกวันที่ใหม่");
+          setIsSubmitting(false);
+          return;
+        }
+
         // สำหรับ transfer บันทึก account_id (บัญชีต้นทาง) และ related_account_id (บัญชีปลายทาง)
         transactionData = {
           amount: parseFloat(amount),
           description: description || "โอนเงิน",
-          date: new Date(date).getTime().toString(), // แปลงเป็น bigint timestamp
+          date: dateValue.getTime().toString(), // แปลงเป็น bigint timestamp
           account_id: transferFromAccount, // บัญชีต้นทาง (เงินออก)
           related_account_id: transferToAccount, // บัญชีปลายทาง (เงินเข้า)
           category_id: selectedCategory || categories.find(cat => cat.type?.name === "Transfer")?.id || categories[0]?.id,
@@ -332,21 +356,39 @@ function NewTransactionPage() {
             
             if (currentBalance < expenseAmount) {
               alert(`ยอดเงินในบัญชี "${selectedAccountData.name}" ไม่เพียงพอ\nยอดคงเหลือ: ${currentBalance.toLocaleString()} บาท\nต้องการจ่าย: ${expenseAmount.toLocaleString()} บาท`);
+              setIsSubmitting(false);
               return;
             }
           }
         }
 
+        // Validate and convert date
+        const dateValue = new Date(date);
+        if (isNaN(dateValue.getTime())) {
+          alert("วันที่ไม่ถูกต้อง กรุณาเลือกวันที่ใหม่");
+          setIsSubmitting(false);
+          return;
+        }
+
         transactionData = {
           amount: parseFloat(amount),
           description,
-          date: new Date(date).getTime().toString(), // แปลงเป็น bigint timestamp
+          date: dateValue.getTime().toString(), // แปลงเป็น bigint timestamp
           account_id: selectedAccount,
           category_id: selectedCategory,
         };
       }
 
+      console.log('Sending transaction data to API:', {
+        ...transactionData,
+        dateOriginal: date,
+        dateConverted: transactionData.date,
+        isDateValid: !isNaN(new Date(date).getTime())
+      });
+
       const response = await createTransaction(transactionData);
+      
+      console.log('API Response:', response);
       
       if (response.success) {
         // อัปเดตข้อมูลบัญชีหลังจากบันทึกธุรกรรมสำเร็จ

@@ -117,6 +117,7 @@ const handler = async (req, res) => {
       // PATCH - แก้ไขบัญชี
       if (req.method === 'PATCH') {
         const { name, amount } = req.body;
+        console.log('PATCH request received:', { accountId, userId, name, amount, body: req.body });
 
         // ตรวจสอบว่าบัญชีมีอยู่และเป็นของผู้ใช้
         const existingResult = await client.query(
@@ -166,11 +167,12 @@ const handler = async (req, res) => {
         }
 
         if (amount !== undefined) {
-          if (isNaN(parseFloat(amount))) {
+          const parsedAmount = parseFloat(amount);
+          if (isNaN(parsedAmount) || parsedAmount < 0) {
             return res.status(400).json({ 
               success: false,
               error: 'VALIDATION_ERROR',
-              message: '❌ ยอดเงินต้องเป็นตัวเลขเท่านั้น',
+              message: '❌ ยอดเงินต้องเป็นตัวเลขที่มากกว่าหรือเท่ากับ 0',
               field: 'amount' 
             });
           }
