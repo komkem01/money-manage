@@ -134,7 +134,7 @@ export const getAccountById = async (accountId: string) => {
  */
 export const createAccount = async (accountData: {
   name: string;
-  initial_balance: number;
+  amount: number;
 }) => {
   try {
     const token = getAuthToken();
@@ -165,11 +165,11 @@ export const createAccount = async (accountData: {
 };
 
 /**
- * อัปเดตบัญชี
+ * อัปเดตบัญชี (ใช้ PATCH method สำหรับ partial updates)
  */
 export const updateAccount = async (accountId: string, accountData: {
-  name: string;
-  initial_balance: number;
+  name?: string;
+  amount?: number;
 }) => {
   try {
     const token = getAuthToken();
@@ -178,7 +178,7 @@ export const updateAccount = async (accountId: string, accountData: {
     }
 
     const response = await fetch(`${API_BASE_URL}/accounts/${accountId}`, {
-      method: 'PUT',
+      method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`

@@ -226,16 +226,16 @@ function AccountsPage() {
   const handleSaveAccount = async (formData: {
     id: string | null;
     name: string;
-    initialBalance: number;
+    amount: number;
   }) => {
     try {
       console.log("Saving account:", formData);
       
       if (formData.id) {
-        // แก้ไขบัญชี
+        // แก้ไขบัญชี (ใช้ PATCH method)
         const response = await updateAccount(formData.id, {
           name: formData.name,
-          initial_balance: formData.initialBalance
+          amount: formData.amount
         });
         
         if (response.success) {
@@ -253,7 +253,7 @@ function AccountsPage() {
         // สร้างบัญชีใหม่
         const response = await createAccount({
           name: formData.name,
-          initial_balance: formData.initialBalance
+          amount: formData.amount
         });
         
         if (response.success) {
@@ -447,7 +447,7 @@ interface AccountModalProps {
   onSave: (formData: {
     id: string | null;
     name: string;
-    initialBalance: number;
+    amount: number;
   }) => void;
 }
 
@@ -457,7 +457,7 @@ const AccountModal: React.FC<AccountModalProps> = ({
   onSave,
 }) => {
   const [name, setName] = useState<string>(account?.name || "");
-  const [initialBalance, setInitialBalance] = useState<number>(
+  const [amount, setAmount] = useState<number>(
     account ? parseFloat(account.amount) : 0
   );
   const [error, setError] = useState<string>("");
@@ -471,7 +471,7 @@ const AccountModal: React.FC<AccountModalProps> = ({
     onSave({
       id: account?.id || null, // ส่ง id (ถ้ามี)
       name: name,
-      initialBalance: initialBalance,
+      amount: amount,
     });
   };
 
@@ -526,9 +526,9 @@ const AccountModal: React.FC<AccountModalProps> = ({
             <input
               type="number"
               id="initialBalance"
-              value={initialBalance}
+              value={amount}
               onChange={(e) =>
-                setInitialBalance(parseFloat(e.target.value) || 0)
+                setAmount(parseFloat(e.target.value) || 0)
               }
               required
               className="w-full px-4 py-3 border border-gray-300 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"

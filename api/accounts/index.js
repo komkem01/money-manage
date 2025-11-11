@@ -97,9 +97,9 @@ const handler = async (req, res) => {
         });
       }
 
-      // POST - สร้างบัญชีใหม่
+            // POST - สร้างบัญชีใหม่
       if (req.method === 'POST') {
-        const { name, initial_balance } = req.body;
+        const { name, amount } = req.body;
 
         // Validation
         if (!name || !name.trim()) {
@@ -111,21 +111,21 @@ const handler = async (req, res) => {
           });
         }
 
-        if (initial_balance === undefined || initial_balance === null) {
+        if (amount === undefined || amount === null) {
           return res.status(400).json({ 
             success: false,
             error: 'VALIDATION_ERROR',
-            message: '❌ กรุณากรอกยอดเงินเริ่มต้น',
-            field: 'initial_balance' 
+            message: '❌ กรุณาระบุยอดเงินเริ่มต้น',
+            field: 'amount' 
           });
         }
 
-        if (isNaN(parseFloat(initial_balance))) {
+        if (isNaN(parseFloat(amount))) {
           return res.status(400).json({ 
             success: false,
             error: 'VALIDATION_ERROR',
             message: '❌ ยอดเงินต้องเป็นตัวเลขเท่านั้น',
-            field: 'initial_balance' 
+            field: 'amount' 
           });
         }
 
@@ -153,7 +153,7 @@ const handler = async (req, res) => {
           `INSERT INTO accounts (name, amount, user_id, created_at, updated_at)
            VALUES ($1, $2, $3, $4, $5)
            RETURNING *`,
-          [name.trim(), parseFloat(initial_balance), userId, now, now]
+          [name.trim(), parseFloat(amount), userId, now, now]
         );
 
         const newAccount = newAccountResult.rows[0];

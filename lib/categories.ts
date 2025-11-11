@@ -166,12 +166,12 @@ export const createCategory = async (categoryData: CategoryFormData): Promise<Ca
 };
 
 /**
- * Update category
+ * Update category (ใช้ PATCH method สำหรับ partial updates)
  */
-export const updateCategory = async (id: string, categoryData: CategoryFormData): Promise<CategoryResponse> => {
+export const updateCategory = async (id: string, categoryData: Partial<CategoryFormData>): Promise<CategoryResponse> => {
   try {
     const response = await fetch(`${API_BASE_URL}/categories/${id}`, {
-      method: 'PUT',
+      method: 'PATCH',
       headers: getAuthHeader(),
       body: JSON.stringify(categoryData),
     });

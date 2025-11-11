@@ -1,5 +1,14 @@
 const { Client } = require('pg');
 
+const getClient = async () => {
+  const client = new Client({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+  });
+  await client.connect();
+  return client;
+};
+
 const handler = async (req, res) => {
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -12,28 +21,36 @@ const handler = async (req, res) => {
   }
 
   if (req.method !== 'GET') {
-    return res.status(405).json({ message: 'Method not allowed' });
+    return res.status(405).json({ 
+      success: false,
+      error: 'METHOD_NOT_ALLOWED',
+      message: '❌ Method ไม่ได้รับอนุญาต กรุณาใช้ GET',
+      allowedMethods: ['GET']
+    });
   }
 
-  const client = new Client({
-    connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false },
-  });
+  const client = await getClient();
 
   try {
-    await client.connect();
-    
     const result = await client.query('SELECT * FROM types ORDER BY name ASC');
+
+    const types = result.rows.map(type => ({
+      ...type,
+      created_at: type.created_at ? type.created_at.toString() : null,
+      updated_at: type.updated_at ? type.updated_at.toString() : null,
+    }));
 
     return res.json({
       success: true,
-      data: result.rows
+      data: types
     });
   } catch (error) {
     console.error('Types API error:', error);
     return res.status(500).json({
       success: false,
-      message: 'เกิดข้อผิดพลาด'
+      error: 'INTERNAL_SERVER_ERROR',
+      message: '❌ เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่อีกครั้ง',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   } finally {
     await client.end();

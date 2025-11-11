@@ -59,20 +59,14 @@ const getAuthToken = () => {
 };
 
 /**
- * Get all types
+ * Get all types (ไม่ต้องใช้ authentication)
  */
 export const getAllTypes = async (): Promise<TypeResponse> => {
   try {
-    const token = getAuthToken();
-    if (!token) {
-      throw new Error('No authentication token found');
-    }
-
     const response = await fetch(`${API_BASE_URL}/types`, {
       method: 'GET',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
+        'Content-Type': 'application/json'
       }
     });
 
