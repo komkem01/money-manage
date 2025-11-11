@@ -1,3 +1,5 @@
+import { getAuthToken as getAuthTokenFromAuth } from './auth';
+
 // API Configuration
 const API_BASE_URL = process.env.NODE_ENV === 'production' 
   ? process.env.NEXT_PUBLIC_API_URL || 'https://your-domain.com/api'
@@ -59,18 +61,10 @@ const getCookie = (name: string): string | null => {
 };
 
 /**
- * ดึง auth token จาก cookie และ localStorage
+ * ดึง auth token จาก auth.ts
  */
 const getAuthToken = () => {
-  if (typeof window !== 'undefined') {
-    // ลองจาก cookie ก่อน
-    const cookieToken = getCookie('authToken');
-    if (cookieToken) return cookieToken;
-    
-    // fallback ไป localStorage
-    return localStorage.getItem('authToken');
-  }
-  return null;
+  return getAuthTokenFromAuth();
 };
 
 /**

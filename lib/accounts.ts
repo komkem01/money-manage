@@ -1,7 +1,26 @@
 // Account API functions
 
+// Interface definitions
+export interface Account {
+  id: string;
+  name: string;
+  balance: string;
+  user_id: string;
+  type_id: string;
+  created_at: string;
+  updated_at?: string;
+  deleted_at?: string;
+  type: {
+    id: string;
+    name: string;
+  };
+}
+
+import { getAuthToken as getAuthTokenFromAuth } from './auth';
+
+// API Configuration
 const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://your-production-domain.com/api' 
+  ? process.env.NEXT_PUBLIC_API_URL || 'https://your-domain.com/api'
   : 'http://192.168.1.44:5000/api';
 
 /**
@@ -23,16 +42,11 @@ const getCookie = (name: string): string | null => {
 /**
  * ดึง auth token จาก cookie และ localStorage
  */
-const getAuthToken = () => {
-  if (typeof window !== 'undefined') {
-    // ลองจาก cookie ก่อน
-    const cookieToken = getCookie('authToken');
-    if (cookieToken) return cookieToken;
-    
-    // fallback ไป localStorage
-    return localStorage.getItem('authToken');
-  }
-  return null;
+/**
+ * ดึง auth token จาก auth.ts
+ */
+export const getAuthToken = (): string | null => {
+  return getAuthTokenFromAuth();
 };
 
 /**
