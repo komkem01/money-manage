@@ -1,37 +1,47 @@
-const { Pool } = require('pg');
+const { Client } = require('pg');
 const jwt = require('jsonwebtoken');
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-  max: 20,
-});
+const getClient = async () => {
+  const client = new Client({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+  });
+  await client.connect();
+  return client;
+};
 
 const authenticate = (handler) => async (req, res) => {
+  const client = await getClient();
+  
   try {
     const authHeader = req.headers.authorization;
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      await client.end();
       return res.status(401).json({ success: false, message: 'ไม่พบ token' });
     }
 
     const token = authHeader.substring(7);
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
-    const userResult = await pool.query(
+    const userResult = await client.query(
       'SELECT * FROM users WHERE id = $1 AND deleted_at IS NULL',
       [decoded.userId]
     );
 
     if (userResult.rows.length === 0) {
+      await client.end();
       return res.status(401).json({ success: false, message: 'ไม่พบผู้ใช้' });
     }
 
     req.user = userResult.rows[0];
     req.userId = decoded.userId;
+    req.client = client;
     
     return handler(req, res);
   } catch (error) {
+    console.error('Authentication error:', error);
+    await client.end();
     return res.status(401).json({ success: false, message: 'Token ไม่ถูกต้อง' });
   }
 };
@@ -49,7 +59,7 @@ const handler = async (req, res) => {
 
   return authenticate(async (req, res) => {
     const userId = req.user.id;
-    const client = await pool.connect();
+    const client = req.client;
 
     try {
       // GET - ดึงธุรกรรมทั้งหมด
@@ -120,117 +130,121 @@ const handler = async (req, res) => {
 
         await client.query('BEGIN');
 
-        // ตรวจสอบ account
-        const accountResult = await client.query(
-          'SELECT * FROM accounts WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
-          [account_id, userId]
-        );
-
-        if (accountResult.rows.length === 0) {
-          await client.query('ROLLBACK');
-          return res.status(400).json({ success: false, message: 'ไม่พบบัญชีที่ระบุ' });
-        }
-
-        // ตรวจสอบ category และ type
-        const categoryResult = await client.query(
-          `SELECT c.*, t.name as type_name FROM categories c
-           JOIN types t ON c.type_id = t.id
-           WHERE c.id = $1 AND c.user_id = $2 AND c.deleted_at IS NULL`,
-          [category_id, userId]
-        );
-
-        if (categoryResult.rows.length === 0) {
-          await client.query('ROLLBACK');
-          return res.status(400).json({ success: false, message: 'ไม่พบหมวดหมู่ที่ระบุ' });
-        }
-
-        const category = categoryResult.rows[0];
-        const account = accountResult.rows[0];
-
-        // ตรวจสอบยอดเงินสำหรับ Expense และ Transfer
-        if (category.type_name === 'Transfer' || category.type_name === 'Expense') {
-          const currentBalance = parseFloat(account.amount);
-          const requestAmount = parseFloat(amount);
-          
-          if (currentBalance < requestAmount) {
-            await client.query('ROLLBACK');
-            return res.status(400).json({
-              success: false,
-              message: `ยอดเงินในบัญชี "${account.name}" ไม่เพียงพอ (คงเหลือ: ${currentBalance} บาท)`,
-            });
-          }
-        }
-
-        // ตรวจสอบ related_account สำหรับ Transfer
-        if (related_account_id) {
-          const relatedResult = await client.query(
+        try {
+          // ตรวจสอบ account
+          const accountResult = await client.query(
             'SELECT * FROM accounts WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
-            [related_account_id, userId]
+            [account_id, userId]
           );
 
-          if (relatedResult.rows.length === 0) {
+          if (accountResult.rows.length === 0) {
             await client.query('ROLLBACK');
-            return res.status(400).json({ success: false, message: 'ไม่พบบัญชีปลายทาง' });
+            return res.status(400).json({ success: false, message: 'ไม่พบบัญชีที่ระบุ' });
           }
-        }
 
-        // สร้างธุรกรรม
-        const transactionAmount = category.type_name === 'Transfer' ? Math.abs(parseFloat(amount)) : parseFloat(amount);
-        const now = Date.now().toString();
-        const txDate = transactionDate ? new Date(transactionDate).getTime().toString() : now;
+          // ตรวจสอบ category และ type
+          const categoryResult = await client.query(
+            `SELECT c.*, t.name as type_name FROM categories c
+             JOIN types t ON c.type_id = t.id
+             WHERE c.id = $1 AND c.user_id = $2 AND c.deleted_at IS NULL`,
+            [category_id, userId]
+          );
 
-        const newTransactionResult = await client.query(
-          `INSERT INTO transactions (amount, description, date, user_id, type_id, account_id, category_id, related_account_id, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-           RETURNING *`,
-          [transactionAmount, description || null, txDate, userId, category.type_id, account_id, category_id, related_account_id || null, now, now]
-        );
+          if (categoryResult.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ success: false, message: 'ไม่พบหมวดหมู่ที่ระบุ' });
+          }
 
-        // อัปเดตยอดเงินในบัญชี
-        let balanceChange = parseFloat(amount);
+          const category = categoryResult.rows[0];
+          const account = accountResult.rows[0];
 
-        if (category.type_name === 'Expense') {
-          balanceChange = -balanceChange;
-        } else if (category.type_name === 'Transfer') {
-          balanceChange = -balanceChange;
-        }
+          // ตรวจสอบยอดเงินสำหรับ Expense และ Transfer
+          if (category.type_name === 'Transfer' || category.type_name === 'Expense') {
+            const currentBalance = parseFloat(account.amount);
+            const requestAmount = parseFloat(amount);
+            
+            if (currentBalance < requestAmount) {
+              await client.query('ROLLBACK');
+              return res.status(400).json({
+                success: false,
+                message: `ยอดเงินในบัญชี "${account.name}" ไม่เพียงพอ (คงเหลือ: ${currentBalance} บาท)`,
+              });
+            }
+          }
 
-        await client.query(
-          'UPDATE accounts SET amount = amount + $1, updated_at = $2 WHERE id = $3',
-          [balanceChange, now, account_id]
-        );
+          // ตรวจสอบ related_account สำหรับ Transfer
+          if (related_account_id) {
+            const relatedResult = await client.query(
+              'SELECT * FROM accounts WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
+              [related_account_id, userId]
+            );
 
-        // ถ้าเป็น Transfer ต้องเพิ่มยอดเงินในบัญชีปลายทาง
-        if (category.type_name === 'Transfer' && related_account_id) {
+            if (relatedResult.rows.length === 0) {
+              await client.query('ROLLBACK');
+              return res.status(400).json({ success: false, message: 'ไม่พบบัญชีปลายทาง' });
+            }
+          }
+
+          // สร้างธุรกรรม
+          const transactionAmount = category.type_name === 'Transfer' ? Math.abs(parseFloat(amount)) : parseFloat(amount);
+          const now = Date.now().toString();
+          const txDate = transactionDate ? new Date(transactionDate).getTime().toString() : now;
+
+          const newTransactionResult = await client.query(
+            `INSERT INTO transactions (amount, description, date, user_id, type_id, account_id, category_id, related_account_id, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+             RETURNING *`,
+            [transactionAmount, description || null, txDate, userId, category.type_id, account_id, category_id, related_account_id || null, now, now]
+          );
+
+          // อัปเดตยอดเงินในบัญชี
+          let balanceChange = parseFloat(amount);
+
+          if (category.type_name === 'Expense') {
+            balanceChange = -balanceChange;
+          } else if (category.type_name === 'Transfer') {
+            balanceChange = -balanceChange;
+          }
+
           await client.query(
             'UPDATE accounts SET amount = amount + $1, updated_at = $2 WHERE id = $3',
-            [parseFloat(amount), now, related_account_id]
+            [balanceChange, now, account_id]
           );
+
+          // ถ้าเป็น Transfer ต้องเพิ่มยอดเงินในบัญชีปลายทาง
+          if (category.type_name === 'Transfer' && related_account_id) {
+            await client.query(
+              'UPDATE accounts SET amount = amount + $1, updated_at = $2 WHERE id = $3',
+              [parseFloat(amount), now, related_account_id]
+            );
+          }
+
+          await client.query('COMMIT');
+
+          const newTransaction = newTransactionResult.rows[0];
+
+          return res.status(201).json({
+            success: true,
+            data: {
+              ...newTransaction,
+              date: newTransaction.date ? newTransaction.date.toString() : null,
+              created_at: newTransaction.created_at ? newTransaction.created_at.toString() : null,
+              updated_at: newTransaction.updated_at ? newTransaction.updated_at.toString() : null
+            },
+            message: 'สร้างธุรกรรมสำเร็จ',
+          });
+        } catch (error) {
+          await client.query('ROLLBACK');
+          throw error;
         }
-
-        await client.query('COMMIT');
-
-        const newTransaction = newTransactionResult.rows[0];
-
-        return res.status(201).json({
-          success: true,
-          data: {
-            ...newTransaction,
-            date: newTransaction.date ? newTransaction.date.toString() : null,
-            created_at: newTransaction.created_at ? newTransaction.created_at.toString() : null,
-            updated_at: newTransaction.updated_at ? newTransaction.updated_at.toString() : null
-          },
-          message: 'สร้างธุรกรรมสำเร็จ',
-        });
       }
 
       return res.status(405).json({ message: 'Method not allowed' });
     } catch (error) {
-      await client.query('ROLLBACK');
       console.error('Transactions API error:', error);
       return res.status(500).json({ success: false, message: 'เกิดข้อผิดพลาด', error: error.message });
     } finally {
-      client.release();
+      await client.end();
     }
   })(req, res);
 };

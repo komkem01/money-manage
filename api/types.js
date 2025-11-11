@@ -1,10 +1,4 @@
-const { Pool } = require('pg');
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-  max: 20,
-});
+const { Client } = require('pg');
 
 const handler = async (req, res) => {
   res.setHeader('Access-Control-Allow-Credentials', true);
@@ -21,10 +15,15 @@ const handler = async (req, res) => {
     return res.status(405).json({ message: 'Method not allowed' });
   }
 
+  const client = new Client({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+  });
+
   try {
-    const result = await pool.query(
-      'SELECT * FROM types ORDER BY name ASC'
-    );
+    await client.connect();
+    
+    const result = await client.query('SELECT * FROM types ORDER BY name ASC');
 
     return res.json({
       success: true,
@@ -36,6 +35,8 @@ const handler = async (req, res) => {
       success: false,
       message: 'เกิดข้อผิดพลาด'
     });
+  } finally {
+    await client.end();
   }
 };
 

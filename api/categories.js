@@ -1,37 +1,47 @@
-const { Pool } = require('pg');
+const { Client } = require('pg');
 const jwt = require('jsonwebtoken');
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-  max: 20,
-});
+const getClient = async () => {
+  const client = new Client({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+  });
+  await client.connect();
+  return client;
+};
 
 const authenticate = (handler) => async (req, res) => {
+  const client = await getClient();
+  
   try {
     const authHeader = req.headers.authorization;
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      await client.end();
       return res.status(401).json({ success: false, message: 'ไม่พบ token' });
     }
 
     const token = authHeader.substring(7);
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
-    const userResult = await pool.query(
+    const userResult = await client.query(
       'SELECT * FROM users WHERE id = $1 AND deleted_at IS NULL',
       [decoded.userId]
     );
 
     if (userResult.rows.length === 0) {
+      await client.end();
       return res.status(401).json({ success: false, message: 'ไม่พบผู้ใช้' });
     }
 
     req.user = userResult.rows[0];
     req.userId = decoded.userId;
+    req.client = client;
     
     return handler(req, res);
   } catch (error) {
+    console.error('Authentication error:', error);
+    await client.end();
     return res.status(401).json({ success: false, message: 'Token ไม่ถูกต้อง' });
   }
 };
@@ -49,11 +59,11 @@ const handler = async (req, res) => {
 
   return authenticate(async (req, res) => {
     const userId = req.user.id;
+    const client = req.client;
 
     try {
-      // GET - ดึงหมวดหมู่ทั้งหมด
       if (req.method === 'GET') {
-        const result = await pool.query(
+        const result = await client.query(
           `SELECT c.*, t.name as type_name
            FROM categories c
            JOIN types t ON c.type_id = t.id
@@ -72,7 +82,6 @@ const handler = async (req, res) => {
         return res.json({ success: true, data: categories });
       }
 
-      // POST - สร้างหมวดหมู่ใหม่
       if (req.method === 'POST') {
         const { name, type_id } = req.body;
 
@@ -84,8 +93,7 @@ const handler = async (req, res) => {
           return res.status(400).json({ success: false, message: 'กรุณาระบุประเภท' });
         }
 
-        // ตรวจสอบชื่อซ้ำ
-        const existingResult = await pool.query(
+        const existingResult = await client.query(
           'SELECT id FROM categories WHERE user_id = $1 AND type_id = $2 AND name = $3 AND deleted_at IS NULL',
           [userId, type_id, name.trim()]
         );
@@ -95,7 +103,7 @@ const handler = async (req, res) => {
         }
 
         const now = Date.now().toString();
-        const newCategoryResult = await pool.query(
+        const newCategoryResult = await client.query(
           `INSERT INTO categories (name, user_id, type_id, created_at, updated_at)
            VALUES ($1, $2, $3, $4, $5)
            RETURNING *`,
@@ -119,6 +127,8 @@ const handler = async (req, res) => {
     } catch (error) {
       console.error('Categories API error:', error);
       return res.status(500).json({ success: false, message: 'เกิดข้อผิดพลาด' });
+    } finally {
+      await client.end();
     }
   })(req, res);
 };

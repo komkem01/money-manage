@@ -1,12 +1,13 @@
-const { Pool } = require('pg');
+const { Client } = require('pg');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-  max: 20,
-});
+const getClient = () => {
+  return new Client({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+  });
+};
 
 const handler = async (req, res) => {
   // CORS
@@ -24,11 +25,15 @@ const handler = async (req, res) => {
     return res.status(405).json({ message: 'Method not allowed' });
   }
 
+  const client = getClient();
+  
   try {
+    await client.connect();
+    
     const { email, password } = req.body;
 
     // ค้นหา user
-    const userResult = await pool.query(
+    const userResult = await client.query(
       'SELECT * FROM users WHERE LOWER(email) = LOWER($1) AND deleted_at IS NULL',
       [email]
     );
@@ -54,7 +59,7 @@ const handler = async (req, res) => {
 
     // อัปเดต updated_at
     const now = Date.now().toString();
-    await pool.query('UPDATE users SET updated_at = $1 WHERE id = $2', [now, user.id]);
+    await client.query('UPDATE users SET updated_at = $1 WHERE id = $2', [now, user.id]);
 
     // สร้าง JWT token
     const token = jwt.sign(
@@ -86,6 +91,8 @@ const handler = async (req, res) => {
       error: 'Login failed',
       message: 'An error occurred during login. Please try again.',
     });
+  } finally {
+    await client.end();
   }
 };
 

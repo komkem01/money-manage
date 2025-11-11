@@ -1,12 +1,14 @@
-const { Pool } = require('pg');
+const { Client } = require('pg');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-  max: 20,
-});
+// ใช้ Client แทน Pool สำหรับ Serverless
+const getClient = () => {
+  return new Client({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+  });
+};
 
 const handler = async (req, res) => {
   // CORS
@@ -24,11 +26,15 @@ const handler = async (req, res) => {
     return res.status(405).json({ message: 'Method not allowed' });
   }
 
+  const client = getClient();
+  
   try {
+    await client.connect();
+    
     const { firstname, lastname, displayname, phone, email, password } = req.body;
 
     // ตรวจสอบ email ซ้ำ
-    const existingUserResult = await pool.query(
+    const existingUserResult = await client.query(
       'SELECT id FROM users WHERE LOWER(email) = LOWER($1) AND deleted_at IS NULL',
       [email]
     );
@@ -46,7 +52,7 @@ const handler = async (req, res) => {
     const now = Date.now().toString();
 
     // สร้าง user ใหม่
-    const newUserResult = await pool.query(
+    const newUserResult = await client.query(
       `INSERT INTO users (firstname, lastname, displayname, phone, email, password, created_at, updated_at)
        VALUES ($1, $2, $3, $4, LOWER($5), $6, $7, $8)
        RETURNING id, firstname, lastname, displayname, phone, email, created_at`,
@@ -81,6 +87,8 @@ const handler = async (req, res) => {
       error: 'Registration failed',
       message: 'An error occurred during registration. Please try again.',
     });
+  } finally {
+    await client.end();
   }
 };
 
