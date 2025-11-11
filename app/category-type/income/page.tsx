@@ -1,6 +1,9 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { getCategoriesByType, createCategory, updateCategory, deleteCategory } from '@/lib/categories';
+import { getAllTypes } from '@/lib/types';
+import { getAuthToken } from '@/lib/auth';
 
 // --- ไอคอน SVG (คัดลอกมา) ---
 const ArrowLeftIcon = () => (
@@ -96,47 +99,111 @@ const CheckCircleIcon = () => (
 );
 
 // --- ประเภทข้อมูล (Interfaces) ---
-type CategoryType = "expense" | "income" | "transfer";
-
 interface Category {
   id: string;
   name: string;
-  type: CategoryType;
+  user_id: string;
+  type_id: string;
+  created_at: string;
+  updated_at?: string;
+  type: {
+    id: string;
+    name: string;
+  };
 }
 
-// --- Mock Data (ข้อมูลจำลอง) ---
-const mockCategories: Category[] = [
-  { id: "c1", name: "ค่าอาหาร", type: "expense" },
-  { id: "c2", name: "ค่าเดินทาง", type: "expense" },
-  { id: "c3", name: "ค่าที่พัก", type: "expense" },
-  { id: "c4", name: "เงินเดือน", type: "income" },
-  { id: "c5", name: "รายได้เสริม", type: "income" },
-  { id: "c6", name: "โอนเข้าบัญชีออมทรัพย์", type: "transfer" },
-];
+interface Type {
+  id: string;
+  name: string;
+}
 
 /**
- * (ใหม่) หน้าจัดการหมวดหมู่ "รายรับ" (Income Categories Page)
+ * หน้าจัดการหมวดหมู่ "รายรับ" (Income Categories Page)
  */
 const IncomeCategoriesPage: React.FC = () => {
   const router = useRouter();
 
-  // (ใหม่) กำหนดประเภทตายตัวสำหรับหน้านี้
-  const pageType: CategoryType = "income";
-
-  const [categories, setCategories] = useState<Category[]>(mockCategories);
+  // State สำหรับเก็บรายการหมวดหมู่และประเภท
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [types, setTypes] = useState<Type[]>([]);
+  const [incomeTypeId, setIncomeTypeId] = useState<string>('');
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [showToast, setShowToast] = useState<string>("");
   const [deleteCategoryId, setDeleteCategoryId] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>("");
 
-  // กรองหมวดหมู่ตามประเภทของหน้านี้ (income)
-  const filteredCategories = categories.filter((c) => c.type === pageType);
+  // โหลดข้อมูลจาก API
+  const loadCategories = async () => {
+    try {
+      if (!incomeTypeId) return;
+      
+      const categoriesResponse = await getCategoriesByType(incomeTypeId);
+      if (categoriesResponse.success && categoriesResponse.data) {
+        setCategories(categoriesResponse.data as Category[]);
+      }
+    } catch (error: any) {
+      console.error('Load categories error:', error);
+      setError(error.message || 'เกิดข้อผิดพลาดในการโหลดหมวดหมู่');
+    }
+  };
 
+  // โหลดข้อมูลเมื่อ component mount
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const token = getAuthToken();
+        if (!token) {
+          router.push('/login');
+          return;
+        }
+
+        console.log("Loading types and income categories...");
+        
+        // โหลด types ก่อน
+        const typesResponse = await getAllTypes();
+        if (typesResponse.success && typesResponse.data) {
+          setTypes(typesResponse.data as Type[]);
+          
+          // หา income type ID
+          const incomeType = (typesResponse.data as Type[]).find(type => type.name === 'Income');
+          if (incomeType) {
+            setIncomeTypeId(incomeType.id);
+            
+            // โหลด categories สำหรับ income type
+            const categoriesResponse = await getCategoriesByType(incomeType.id);
+            if (categoriesResponse.success && categoriesResponse.data) {
+              setCategories(categoriesResponse.data as Category[]);
+            }
+          }
+        }
+      } catch (error: any) {
+        console.error('Load data error:', error);
+        setError(error.message || 'เกิดข้อผิดพลาดในการโหลดข้อมูล');
+        
+        if (error.message?.includes('authentication') || error.message?.includes('token')) {
+          router.push('/login');
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [router]);
+
+  /**
+   * เปิด Modal สำหรับ "เพิ่ม" หมวดหมู่ใหม่
+   */
   const handleOpenAddModal = () => {
     setEditingCategory(null);
     setIsModalOpen(true);
   };
 
+  /**
+   * เปิด Modal สำหรับ "แก้ไข" หมวดหมู่
+   */
   const handleOpenEditModal = (category: Category) => {
     setEditingCategory(category);
     setIsModalOpen(true);
@@ -147,48 +214,94 @@ const IncomeCategoriesPage: React.FC = () => {
     setDeleteCategoryId(id);
   };
 
-  // ดำเนินการลบจริง
-  const handleDeleteCategory = () => {
+  // ดำเนินการลบจริง (Soft Delete)
+  const handleDeleteCategory = async () => {
     if (deleteCategoryId) {
-      setCategories((prev) => prev.filter((c) => c.id !== deleteCategoryId));
-      setDeleteCategoryId(null);
-      showToastMessage("ลบหมวดหมู่สำเร็จ!");
+      try {
+        console.log("Deleting category:", deleteCategoryId);
+        const response = await deleteCategory(deleteCategoryId);
+        
+        if (response.success) {
+          // รีเฟรชข้อมูลหมวดหมู่จาก API แทนการลบออกจาก state
+          await loadCategories();
+          showToastMessage("ลบหมวดหมู่สำเร็จ!");
+        } else {
+          setError(response.message || 'ไม่สามารถลบหมวดหมู่ได้');
+        }
+      } catch (error: any) {
+        console.error('Delete category error:', error);
+        setError(error.message || 'เกิดข้อผิดพลาดในการลบหมวดหมู่');
+      } finally {
+        setDeleteCategoryId(null);
+      }
     }
   };
 
-  const handleSaveCategory = (formData: {
+  /**
+   * จัดการการบันทึก (ทั้งเพิ่มและแก้ไข)
+   */
+  const handleSaveCategory = async (formData: {
     id: string | null;
     name: string;
   }) => {
-    if (formData.id) {
-      setCategories((prev) =>
-        prev.map((c) =>
-          c.id === formData.id
-            ? { ...c, name: formData.name, type: pageType }
-            : c
-        )
-      );
-      showToastMessage("แก้ไขหมวดหมู่สำเร็จ!");
-    } else {
-      const newCategory: Category = {
-        id: `c${Math.random()}`,
-        name: formData.name,
-        type: pageType,
-      };
-      setCategories((prev) => [...prev, newCategory]);
-      showToastMessage("เพิ่มหมวดหมู่สำเร็จ!");
+    try {
+      if (!incomeTypeId) {
+        setError('ไม่พบ ID ของประเภทรายรับ');
+        return;
+      }
+
+      console.log("Saving category:", formData);
+      
+      if (formData.id) {
+        // แก้ไขหมวดหมู่
+        const response = await updateCategory(formData.id, {
+          name: formData.name,
+          type_id: incomeTypeId
+        });
+        
+        if (response.success && response.data) {
+          setCategories((prev) =>
+            prev.map((c) =>
+              c.id === formData.id ? response.data as Category : c
+            )
+          );
+          showToastMessage("แก้ไขหมวดหมู่สำเร็จ!");
+        } else {
+          setError(response.message || 'ไม่สามารถแก้ไขหมวดหมู่ได้');
+          return;
+        }
+      } else {
+        // สร้างหมวดหมู่ใหม่
+        const response = await createCategory({
+          name: formData.name,
+          type_id: incomeTypeId
+        });
+        
+        if (response.success && response.data) {
+          setCategories((prev) => [...prev, response.data as Category]);
+          showToastMessage("เพิ่มหมวดหมู่สำเร็จ!");
+        } else {
+          setError(response.message || 'ไม่สามารถสร้างหมวดหมู่ได้');
+          return;
+        }
+      }
+      
+      setIsModalOpen(false);
+    } catch (error: any) {
+      console.error('Save category error:', error);
+      setError(error.message || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล');
     }
-    setIsModalOpen(false);
   };
 
+  /**
+   * ฟังก์ชันแสดง Toast
+   */
   const showToastMessage = (message: string) => {
     setShowToast(message);
     setTimeout(() => {
       setShowToast("");
     }, 3000);
   };
-
-  // ลบ mockNavigate
 
   return (
     <div className="min-h-screen bg-gray-100 font-inter">
@@ -210,6 +323,19 @@ const IncomeCategoriesPage: React.FC = () => {
 
       {/* --- Main Content --- */}
       <main className="max-w-4xl mx-auto p-4 md:p-6">
+        {/* Error Message */}
+        {error && (
+          <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+            {error}
+            <button 
+              onClick={() => setError('')}
+              className="ml-2 text-red-500 hover:text-red-700"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         <div className="bg-white p-6 rounded-lg shadow-lg">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-semibold text-gray-700">
@@ -217,7 +343,8 @@ const IncomeCategoriesPage: React.FC = () => {
             </h2>
             <button
               onClick={handleOpenAddModal}
-              className="flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+              disabled={loading || !incomeTypeId}
+              className="flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <PlusIcon />
               เพิ่มหมวดหมู่ใหม่
@@ -226,9 +353,19 @@ const IncomeCategoriesPage: React.FC = () => {
 
           {/* --- รายการหมวดหมู่ (List) --- */}
           <div className="flow-root">
-            {filteredCategories.length > 0 ? (
+            {loading ? (
+              <div className="text-center py-8">
+                <div className="inline-flex items-center px-4 py-2 text-sm font-medium leading-6 text-gray-500 transition duration-150 ease-in-out">
+                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  กำลังโหลดข้อมูล...
+                </div>
+              </div>
+            ) : categories.length > 0 ? (
               <ul role="list" className="divide-y divide-gray-200">
-                {filteredCategories.map((category) => (
+                {categories.map((category: Category) => (
                   <li
                     key={category.id}
                     className="py-4 flex justify-between items-center"
@@ -251,38 +388,6 @@ const IncomeCategoriesPage: React.FC = () => {
                       >
                         <DeleteIcon />
                       </button>
-                      {/* --- Modal แจ้งเตือนก่อนลบหมวดหมู่ --- */}
-                      {deleteCategoryId && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white bg-opacity-80 backdrop-blur-sm">
-                          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm mx-4">
-                            <div className="flex flex-col items-center text-center">
-                              <DeleteIcon />
-                              <h3 className="text-xl font-bold text-gray-800 mt-4">
-                                ยืนยันการลบ
-                              </h3>
-                              <p className="text-gray-600 mt-2">
-                                คุณแน่ใจหรือไม่ว่าต้องการลบหมวดหมู่นี้?
-                                <br />
-                                การกระทำนี้ไม่สามารถยกเลิกได้
-                              </p>
-                            </div>
-                            <div className="flex justify-center gap-4 mt-6">
-                              <button
-                                onClick={() => setDeleteCategoryId(null)}
-                                className="w-full px-4 py-2 font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
-                              >
-                                ยกเลิก
-                              </button>
-                              <button
-                                onClick={handleDeleteCategory}
-                                className="w-full px-4 py-2 font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
-                              >
-                                ยืนยันการลบ
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   </li>
                 ))}
@@ -296,15 +401,43 @@ const IncomeCategoriesPage: React.FC = () => {
         </div>
       </main>
 
+      {/* --- Modal แจ้งเตือนก่อนลบหมวดหมู่ --- */}
+      {deleteCategoryId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white bg-opacity-80 backdrop-blur-sm">
+          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm mx-4">
+            <div className="flex flex-col items-center text-center">
+              <DeleteIcon />
+              <h3 className="text-xl font-bold text-gray-800 mt-4">ยืนยันการลบ</h3>
+              <p className="text-gray-600 mt-2">คุณแน่ใจหรือไม่ว่าต้องการลบหมวดหมู่นี้?<br/>การกระทำนี้ไม่สามารถยกเลิกได้</p>
+            </div>
+            <div className="flex justify-center gap-4 mt-6">
+              <button
+                onClick={() => setDeleteCategoryId(null)}
+                className="w-full px-4 py-2 font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={handleDeleteCategory}
+                className="w-full px-4 py-2 font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
+              >
+                ยืนยันการลบ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- Modal (หน้าต่างเด้ง) สำหรับ เพิ่ม/แก้ไข --- */}
       {isModalOpen && (
         <CategoryModal
           category={editingCategory}
           onClose={() => setIsModalOpen(false)}
           onSave={handleSaveCategory}
-          defaultType={pageType}
         />
       )}
 
+      {/* --- Toast Notification --- */}
       {showToast && (
         <div className="fixed bottom-5 right-5 z-50 bg-green-600 text-white px-6 py-4 rounded-lg shadow-lg flex items-center">
           <CheckCircleIcon />
@@ -315,19 +448,17 @@ const IncomeCategoriesPage: React.FC = () => {
   );
 };
 
-// --- Component ย่อยสำหรับ Modal (ใช้โค้ดเดิม) ---
+// --- Component ย่อยสำหรับ Modal ---
 interface CategoryModalProps {
   category: Category | null;
   onClose: () => void;
-  onSave: (formData: { id: string | null; name: string }) => void;
-  defaultType: CategoryType;
+  onSave: (formData: { id: string | null; name: string }) => Promise<void>;
 }
 
 const CategoryModal: React.FC<CategoryModalProps> = ({
   category,
   onClose,
   onSave,
-  defaultType,
 }) => {
   const [name, setName] = useState<string>(category?.name || "");
   const [error, setError] = useState<string>("");
@@ -338,7 +469,10 @@ const CategoryModal: React.FC<CategoryModalProps> = ({
       setError("กรุณากรอกชื่อหมวดหมู่");
       return;
     }
-    onSave({ id: category?.id || null, name: name });
+    onSave({
+      id: category?.id || null,
+      name: name,
+    });
   };
 
   return (
@@ -347,10 +481,10 @@ const CategoryModal: React.FC<CategoryModalProps> = ({
         className="relative bg-white w-full max-w-lg rounded-lg shadow-xl p-6"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* --- Header Modal --- */}
         <div className="flex justify-between items-center mb-5">
           <h3 className="text-xl font-bold text-gray-800">
-            {category ? "แก้ไขหมวดหมู่" : "เพิ่มหมวดหมู่ใหม่"} (
-            {defaultType === "income" ? "รายรับ" : ""})
+            {category ? "แก้ไขหมวดหมู่" : "เพิ่มหมวดหมู่ใหม่"} (รายรับ)
           </h3>
           <button
             onClick={onClose}
@@ -360,7 +494,9 @@ const CategoryModal: React.FC<CategoryModalProps> = ({
           </button>
         </div>
 
+        {/* --- Form ใน Modal --- */}
         <form onSubmit={handleSubmit} className="space-y-5">
+          {/* ช่องกรอกชื่อ */}
           <div>
             <label
               htmlFor="categoryName"
@@ -374,13 +510,14 @@ const CategoryModal: React.FC<CategoryModalProps> = ({
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
-              className="w-full px-4 py-3 border border-gray-300 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-3 border border-gray-300 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
               placeholder="เช่น เงินเดือน, รายได้เสริม"
             />
           </div>
 
           {error && <p className="text-sm text-red-600">{error}</p>}
 
+          {/* --- Footer Modal (ปุ่ม) --- */}
           <div className="flex justify-end space-x-3 pt-4">
             <button
               type="button"
@@ -391,7 +528,7 @@ const CategoryModal: React.FC<CategoryModalProps> = ({
             </button>
             <button
               type="submit"
-              className="px-5 py-2 rounded-lg text-white bg-blue-600 hover:bg-blue-700"
+              className="px-5 py-2 rounded-lg text-white bg-green-600 hover:bg-green-700"
             >
               บันทึก
             </button>

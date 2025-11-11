@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { useRouter } from 'next/navigation';
+import { getUserData, removeAuthToken, removeUserData, getAuthToken } from '@/lib/auth';
 
 // --- ไอคอน SVG ---
 const LogOutIcon = () => (
@@ -193,12 +194,35 @@ function DashboardPage() {
   const router = useRouter();
   const [data, setData] = useState(mockData);
   const [showLogoutToast, setShowLogoutToast] = useState(false);
+  const [user, setUser] = useState<any>(null);
 
-  // จำลองการโหลดข้อมูล
+  // ตรวจสอบการเข้าสู่ระบบและโหลดข้อมูล user
   useEffect(() => {
-    // ในอนาคต ให้ fetch ข้อมูลจริงจาก API ที่นี่
-    setData(mockData);
-  }, []);
+    console.log("Dashboard: Checking authentication...");
+    
+    const token = getAuthToken();
+    const userData = getUserData();
+    
+    console.log("Dashboard: Token:", !!token);
+    console.log("Dashboard: User data:", userData);
+    
+    if (!token || !userData) {
+      // ถ้าไม่มี token หรือ user data ให้กลับไปหน้า login
+      console.log("Dashboard: No token or user data, redirecting to login");
+      router.push('/login');
+      return;
+    }
+
+    // ตั้งค่าข้อมูล user
+    setUser(userData);
+    console.log("Dashboard: User set successfully");
+    
+    // อัปเดต mockData ด้วยชื่อจริงของ user
+    setData({
+      ...mockData,
+      userName: userData.displayname || userData.firstname || 'ผู้ใช้'
+    });
+  }, [router]);
 
   /**
    * จัดการการออกจากระบบ
@@ -207,10 +231,12 @@ function DashboardPage() {
     console.log("Logout initiated...");
     setShowLogoutToast(true);
 
+    // ลบ token และ user data
+    removeAuthToken();
+    removeUserData();
+
     setTimeout(() => {
-      // router.push('/login'); // สำหรับแอปจริง
-      // @ts-ignore
-      window.location.href = "/login"; // สำหรับ preview
+      router.push('/login');
     }, 2000);
   };
 

@@ -1,6 +1,8 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { getAllAccounts, createAccount, updateAccount, deleteAccount } from '@/lib/accounts';
+import { getAuthToken } from '@/lib/auth';
 
 // --- ไอคอน SVG ---
 const ArrowLeftIcon = () => (
@@ -115,16 +117,11 @@ const WalletIcon = () => (
 interface Account {
   id: string;
   name: string;
-  initialBalance: number;
+  amount: string; // เปลี่ยนจาก initial_balance เป็น amount ตาม schema
+  user_id: string;
+  created_at: string;
+  updated_at: string;
 }
-
-// --- Mock Data (ข้อมูลจำลอง) ---
-const mockAccounts: Account[] = [
-  { id: "acc1", name: "เงินสด", initialBalance: 5000 },
-  { id: "acc2", name: "บัญชีกสิกร", initialBalance: 10000 },
-  { id: "acc3", name: "บัญชีกรุงไทย", initialBalance: 15000 },
-  { id: "acc4", name: "วอลเล็ต (TrueMoney)", initialBalance: 1000 },
-];
 
 /**
  * หน้าจัดการบัญชี (Accounts Page)
@@ -133,11 +130,48 @@ const mockAccounts: Account[] = [
 function AccountsPage() {
   const router = useRouter();
 
-  const [accounts, setAccounts] = useState<Account[]>(mockAccounts);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [showToast, setShowToast] = useState<string>("");
   const [deleteAccountId, setDeleteAccountId] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>("");
+
+  // โหลดข้อมูลบัญชีเมื่อ component mount
+  useEffect(() => {
+    const checkAuthAndLoadAccounts = async () => {
+      try {
+        const token = getAuthToken();
+        if (!token) {
+          router.push('/login');
+          return;
+        }
+
+        console.log("Loading accounts...");
+        const response = await getAllAccounts();
+        console.log("Accounts loaded:", response);
+        
+        if (response.success) {
+          setAccounts(response.data);
+        } else {
+          setError(response.message || 'ไม่สามารถโหลดข้อมูลบัญชีได้');
+        }
+      } catch (error: any) {
+        console.error('Load accounts error:', error);
+        setError(error.message || 'เกิดข้อผิดพลาดในการโหลดข้อมูล');
+        
+        // ถ้า error เป็น unauthorized ให้กลับไป login
+        if (error.message?.includes('authentication') || error.message?.includes('token')) {
+          router.push('/login');
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkAuthAndLoadAccounts();
+  }, [router]);
 
   /**
    * เปิด Modal สำหรับ "เพิ่ม" บัญชีใหม่
@@ -165,47 +199,77 @@ function AccountsPage() {
   /**
    * ดำเนินการลบจริง
    */
-  const handleDeleteAccount = () => {
+  const handleDeleteAccount = async () => {
     if (deleteAccountId) {
-      setAccounts((prev) => prev.filter((acc) => acc.id !== deleteAccountId));
-      setDeleteAccountId(null);
-      showToastMessage("ลบบัญชีสำเร็จ!");
+      try {
+        console.log("Deleting account:", deleteAccountId);
+        const response = await deleteAccount(deleteAccountId);
+        
+        if (response.success) {
+          setAccounts((prev) => prev.filter((acc) => acc.id !== deleteAccountId));
+          showToastMessage("ลบบัญชีสำเร็จ!");
+        } else {
+          setError(response.message || 'ไม่สามารถลบบัญชีได้');
+        }
+      } catch (error: any) {
+        console.error('Delete account error:', error);
+        setError(error.message || 'เกิดข้อผิดพลาดในการลบบัญชี');
+      } finally {
+        setDeleteAccountId(null);
+      }
     }
   };
 
   /**
-   * (Mock) จัดการการบันทึก (ทั้งเพิ่มและแก้ไข)
+   * จัดการการบันทึก (ทั้งเพิ่มและแก้ไข)
    */
-  const handleSaveAccount = (formData: {
+  const handleSaveAccount = async (formData: {
     id: string | null;
     name: string;
     initialBalance: number;
   }) => {
-    if (formData.id) {
-      // Logic แก้ไข (Mock)
-      setAccounts((prev) =>
-        prev.map((acc) =>
-          acc.id === formData.id
-            ? {
-                ...acc,
-                name: formData.name,
-                initialBalance: formData.initialBalance,
-              }
-            : acc
-        )
-      );
-      showToastMessage("แก้ไขบัญชีสำเร็จ!");
-    } else {
-      // Logic เพิ่มใหม่ (Mock)
-      const newAccount: Account = {
-        id: `acc${Math.random()}`, // สร้าง ID จำลอง
-        name: formData.name,
-        initialBalance: formData.initialBalance,
-      };
-      setAccounts((prev) => [...prev, newAccount]);
-      showToastMessage("เพิ่มบัญชีสำเร็จ!");
+    try {
+      console.log("Saving account:", formData);
+      
+      if (formData.id) {
+        // แก้ไขบัญชี
+        const response = await updateAccount(formData.id, {
+          name: formData.name,
+          initial_balance: formData.initialBalance
+        });
+        
+        if (response.success) {
+          setAccounts((prev) =>
+            prev.map((acc) =>
+              acc.id === formData.id ? response.data : acc
+            )
+          );
+          showToastMessage("แก้ไขบัญชีสำเร็จ!");
+        } else {
+          setError(response.message || 'ไม่สามารถแก้ไขบัญชีได้');
+          return;
+        }
+      } else {
+        // สร้างบัญชีใหม่
+        const response = await createAccount({
+          name: formData.name,
+          initial_balance: formData.initialBalance
+        });
+        
+        if (response.success) {
+          setAccounts((prev) => [...prev, response.data]);
+          showToastMessage("เพิ่มบัญชีสำเร็จ!");
+        } else {
+          setError(response.message || 'ไม่สามารถสร้างบัญชีได้');
+          return;
+        }
+      }
+      
+      setIsModalOpen(false);
+    } catch (error: any) {
+      console.error('Save account error:', error);
+      setError(error.message || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล');
     }
-    setIsModalOpen(false);
   };
 
   /**
@@ -238,6 +302,19 @@ function AccountsPage() {
 
       {/* --- Main Content --- */}
       <main className="max-w-4xl mx-auto p-4 md:p-6">
+        {/* Error Message */}
+        {error && (
+          <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+            {error}
+            <button 
+              onClick={() => setError('')}
+              className="ml-2 text-red-500 hover:text-red-700"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         <div className="bg-white p-6 rounded-lg shadow-lg">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-semibold text-gray-700">
@@ -254,7 +331,17 @@ function AccountsPage() {
 
           {/* --- 3. รายการบัญชี (List) --- */}
           <div className="flow-root">
-            {accounts.length > 0 ? (
+            {loading ? (
+              <div className="text-center py-8">
+                <div className="inline-flex items-center px-4 py-2 text-sm font-medium leading-6 text-gray-500 transition duration-150 ease-in-out">
+                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  กำลังโหลดข้อมูล...
+                </div>
+              </div>
+            ) : accounts.length > 0 ? (
               <ul role="list" className="divide-y divide-gray-200">
                 {accounts.map((account) => (
                   <li
@@ -268,8 +355,8 @@ function AccountsPage() {
                           {account.name}
                         </p>
                         <p className="text-sm text-gray-500">
-                          ยอดเริ่มต้น:{" "}
-                          {account.initialBalance.toLocaleString("th-TH")} ฿
+                          ยอดคงเหลือ:{" "}
+                          {parseFloat(account.amount).toLocaleString("th-TH")} ฿
                         </p>
                       </div>
                     </div>
@@ -371,7 +458,7 @@ const AccountModal: React.FC<AccountModalProps> = ({
 }) => {
   const [name, setName] = useState<string>(account?.name || "");
   const [initialBalance, setInitialBalance] = useState<number>(
-    account?.initialBalance || 0
+    account ? parseFloat(account.amount) : 0
   );
   const [error, setError] = useState<string>("");
 

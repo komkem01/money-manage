@@ -1,7 +1,7 @@
 "use client"; // (ใหม่) เพิ่ม "use client"
 import React, { useState } from "react";
-// import Link from 'next/link'; // แก้ไข: คอมเมนต์ออกชั่วคราวสำหรับ preview
 import { useRouter } from 'next/navigation';
+import { loginUser, storeAuthToken, storeUserData, getAuthToken, getUserData } from '@/lib/auth';
 
 // --- ไอคอน SVG ---
 const LockIcon = () => (
@@ -54,39 +54,55 @@ const LoginPage: React.FC = () => {
 
   /**
    * จัดการการส่งฟอร์มเข้าสู่ระบบ
-   * (Mock Data - ข้อมูลจำลอง)
+   * เชื่อมต่อกับ Backend API
    */
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (isSubmitting) return; // (ใหม่) กันกดซ้ำ
+    if (isSubmitting) return; // กันกดซ้ำ
 
     setError(""); // เคลียร์ข้อความ error เก่า
-    setIsSubmitting(true); // (ใหม่) เริ่มกระบวนการ
+    setIsSubmitting(true); // เริ่มกระบวนการ
 
-    // --- Mock Logic ---
-    // ในอนาคต ให้แทนที่ส่วนนี้ด้วยการเรียก API
-    console.log("--- Mock Login ---");
-    console.log("Email:", email);
-    console.log("Password:", password);
+    try {
+      // 1. เตรียมข้อมูลสำหรับส่ง API
+      const loginData = {
+        email: email,
+        password: password,
+      };
 
-    // จำลองการหน่วงเวลาของ API
-    setTimeout(() => {
-      if (email === "test@gmail.com" && password === "123456") {
-        console.log("เข้าสู่ระบบสำเร็จ! (Mock)");
+      // 2. เรียก API login
+      console.log("Calling login API...");
+      const response = await loginUser(loginData);
 
-        // (ใหม่) แสดง Toast
+      if (response.success) {
+        console.log("Login successful:", response);
+        
+        // 5. บันทึก token และข้อมูล user
+        console.log("Storing token:", response.data.token);
+        console.log("Storing user data:", response.data.user);
+        
+        storeAuthToken(response.data.token);
+        storeUserData(response.data.user);
+
+        // ตรวจสอบว่าเก็บสำเร็จหรือไม่
+        const storedToken = getAuthToken();
+        const storedUser = getUserData();
+        console.log("Token stored successfully:", !!storedToken);
+        console.log("User data stored successfully:", !!storedUser);
+
+        // 6. แสดง Toast สำเร็จ
         setShowToast(true);
 
-        // (ใหม่) ตั้งเวลา "เด้ง" ไปหน้า dashboard
+        // 7. เด้งไปหน้า dashboard (เพราะได้ token แล้ว)
         setTimeout(() => {
           router.push('/dashboard');
-        }, 2000); // รอ 2 วิให้เห็น Toast
-      } else {
-        setError("อีเมลหรือรหัสผ่านไม่ถูกต้อง (Mock)");
-        setIsSubmitting(false); // (ใหม่) คืนค่าปุ่มให้กดได้
+        }, 2000);
       }
-    }, 1000); // จำลองการเรียก API 1 วินาที
-    // --- End Mock Logic ---
+    } catch (error: any) {
+      console.error("Login failed:", error);
+      setError(error.message || "อีเมลหรือรหัสผ่านไม่ถูกต้อง");
+      setIsSubmitting(false);
+    }
   };
 
   return (

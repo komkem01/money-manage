@@ -1,0 +1,199 @@
+// Account API functions
+
+const API_BASE_URL = process.env.NODE_ENV === 'production' 
+  ? 'https://your-production-domain.com/api' 
+  : 'http://192.168.1.44:5000/api';
+
+/**
+ * Get Cookie Helper
+ */
+const getCookie = (name: string): string | null => {
+  if (typeof window === 'undefined') return null;
+  
+  const nameEQ = name + "=";
+  const ca = document.cookie.split(';');
+  for (let i = 0; i < ca.length; i++) {
+    let c = ca[i];
+    while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+    if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
+  }
+  return null;
+};
+
+/**
+ * ดึง auth token จาก cookie และ localStorage
+ */
+const getAuthToken = () => {
+  if (typeof window !== 'undefined') {
+    // ลองจาก cookie ก่อน
+    const cookieToken = getCookie('authToken');
+    if (cookieToken) return cookieToken;
+    
+    // fallback ไป localStorage
+    return localStorage.getItem('authToken');
+  }
+  return null;
+};
+
+/**
+ * ดึงบัญชีทั้งหมดของผู้ใช้
+ */
+export const getAllAccounts = async () => {
+  try {
+    const token = getAuthToken();
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    const response = await fetch(`${API_BASE_URL}/accounts`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to fetch accounts');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Get accounts error:', error);
+    throw error;
+  }
+};
+
+/**
+ * ดึงบัญชีเดียว
+ */
+export const getAccountById = async (accountId: string) => {
+  try {
+    const token = getAuthToken();
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    const response = await fetch(`${API_BASE_URL}/accounts/${accountId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to fetch account');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Get account by ID error:', error);
+    throw error;
+  }
+};
+
+/**
+ * สร้างบัญชีใหม่
+ */
+export const createAccount = async (accountData: {
+  name: string;
+  initial_balance: number;
+}) => {
+  try {
+    const token = getAuthToken();
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    const response = await fetch(`${API_BASE_URL}/accounts`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(accountData)
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to create account');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Create account error:', error);
+    throw error;
+  }
+};
+
+/**
+ * อัปเดตบัญชี
+ */
+export const updateAccount = async (accountId: string, accountData: {
+  name: string;
+  initial_balance: number;
+}) => {
+  try {
+    const token = getAuthToken();
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    const response = await fetch(`${API_BASE_URL}/accounts/${accountId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(accountData)
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to update account');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Update account error:', error);
+    throw error;
+  }
+};
+
+/**
+ * ลบบัญชี
+ */
+export const deleteAccount = async (accountId: string) => {
+  try {
+    const token = getAuthToken();
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    const response = await fetch(`${API_BASE_URL}/accounts/${accountId}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to delete account');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Delete account error:', error);
+    throw error;
+  }
+};

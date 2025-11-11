@@ -66,6 +66,10 @@ app.get('/health', (req, res) => {
 
 // --- API Routes ---
 app.use('/api/auth', require('./routes/auth'));
+app.use('/api/accounts', require('./routes/accounts'));
+app.use('/api/types', require('./routes/types'));
+app.use('/api/categories', require('./routes/categories'));
+app.use('/api/types', require('./routes/types'));
 
 // --- 404 Handler ---
 app.use('*', (req, res) => {
