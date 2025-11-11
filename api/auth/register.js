@@ -9,24 +9,16 @@ const setCORS = (res) => {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 };
 
-// Import Prisma with global instance for serverless
-const { PrismaClient } = require('@prisma/client');
+// Use native PostgreSQL client instead of Prisma for better serverless compatibility
+const { Client } = require('pg');
 
-// Global Prisma instance to prevent multiple connections in serverless
-const globalForPrisma = globalThis;
-
-const prisma = globalForPrisma.prisma || new PrismaClient({
-  datasources: {
-    db: {
-      url: process.env.DATABASE_URL
-    }
-  },
-  log: ['error', 'warn']
-});
-
-if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = prisma;
-}
+// Create database connection
+const createDbConnection = () => {
+  return new Client({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  });
+};
 
 export default async function handler(req, res) {
   setCORS(res);
@@ -64,79 +56,94 @@ export default async function handler(req, res) {
       });
     }
 
-    // ตรวจสอบว่ามี email นี้อยู่ในระบบแล้วหรือไม่
-    const existingUser = await prisma.users.findFirst({
-      where: { 
-        email: email.toLowerCase(),
-        deleted_at: null,
-      },
-    });
+    // Connect to database
+    const client = createDbConnection();
+    await client.connect();
 
-    if (existingUser) {
-      return res.status(400).json({
-        error: 'Registration failed',
-        message: 'Email address is already registered.',
-      });
+    try {
+      // ตรวจสอบว่ามี email นี้อยู่ในระบบแล้วหรือไม่
+      const existingUserQuery = `
+        SELECT id FROM users 
+        WHERE email = $1 AND deleted_at IS NULL
+        LIMIT 1
+      `;
+      const existingUserResult = await client.query(existingUserQuery, [email.toLowerCase()]);
+
+      if (existingUserResult.rows.length > 0) {
+        return res.status(400).json({
+          error: 'Registration failed',
+          message: 'Email address is already registered.',
+        });
+      }
+
+      // Hash password
+      const saltRounds = 12;
+      const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+      // Create user
+      const currentTime = Date.now();
+      const insertUserQuery = `
+        INSERT INTO users (firstname, lastname, displayname, phone, email, password, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING id, firstname, lastname, displayname, phone, email, created_at
+      `;
+      
+      const newUserResult = await client.query(insertUserQuery, [
+        firstname?.trim() || null,
+        lastname?.trim() || null,
+        displayname?.trim() || null,
+        phone?.trim() || null,
+        email.toLowerCase().trim(),
+        hashedPassword,
+        currentTime,
+        currentTime
+      ]);
+
+      const newUser = newUserResult.rows[0];
+    } finally {
+      // Always close the connection
+      await client.end();
     }
 
-    // Hash password
-    const saltRounds = 12;
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
+      // Generate JWT token
+      const tokenPayload = {
+        id: newUser.id,
+        email: newUser.email,
+        firstname: newUser.firstname,
+        lastname: newUser.lastname,
+        displayname: newUser.displayname,
+      };
 
-    // Create user
-    const currentTime = BigInt(Date.now());
-    const newUser = await prisma.users.create({
-      data: {
-        firstname: firstname?.trim() || null,
-        lastname: lastname?.trim() || null,
-        displayname: displayname?.trim() || null,
-        phone: phone?.trim() || null,
-        email: email.toLowerCase().trim(),
-        password: hashedPassword,
-        created_at: currentTime,
-        updated_at: currentTime,
-      },
-    });
+      const token = jwt.sign(
+        tokenPayload, 
+        process.env.JWT_SECRET || 'fallback-secret-key',
+        { 
+          expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+          issuer: 'money-manage-api',
+          audience: 'money-manage-app',
+        }
+      );
 
-    // Generate JWT token
-    const tokenPayload = {
-      id: newUser.id,
-      email: newUser.email,
-      firstname: newUser.firstname,
-      lastname: newUser.lastname,
-      displayname: newUser.displayname,
-    };
-
-    const token = jwt.sign(
-      tokenPayload, 
-      process.env.JWT_SECRET || 'fallback-secret-key',
-      { 
-        expiresIn: process.env.JWT_EXPIRES_IN || '7d',
-        issuer: 'money-manage-api',
-        audience: 'money-manage-app',
-      }
-    );
-
-    // Return success response
-    const response = {
-      success: true,
-      message: 'User registered successfully',
-      data: {
-        user: {
-          id: newUser.id,
-          email: newUser.email,
-          firstname: newUser.firstname,
-          lastname: newUser.lastname,
-          displayname: newUser.displayname,
-          phone: newUser.phone,
-          created_at: newUser.created_at?.toString(),
+      // Return success response
+      const response = {
+        success: true,
+        message: 'User registered successfully',
+        data: {
+          user: {
+            id: newUser.id,
+            email: newUser.email,
+            firstname: newUser.firstname,
+            lastname: newUser.lastname,
+            displayname: newUser.displayname,
+            phone: newUser.phone,
+            created_at: newUser.created_at?.toString(),
+          },
+          token,
         },
-        token,
-      },
-    };
+      };
 
-    console.log('Registration successful for:', email);
-    return res.status(201).json(response);
+      console.log('Registration successful for:', email);
+      return res.status(201).json(response);
 
   } catch (error) {
     console.error('Registration error:', error);

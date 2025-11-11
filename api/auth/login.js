@@ -9,24 +9,16 @@ const setCORS = (res) => {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 };
 
-// Import Prisma with global instance for serverless
-const { PrismaClient } = require('@prisma/client');
+// Use native PostgreSQL client instead of Prisma for better serverless compatibility
+const { Client } = require('pg');
 
-// Global Prisma instance to prevent multiple connections in serverless
-const globalForPrisma = globalThis;
-
-const prisma = globalForPrisma.prisma || new PrismaClient({
-  datasources: {
-    db: {
-      url: process.env.DATABASE_URL
-    }
-  },
-  log: ['error', 'warn']
-});
-
-if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = prisma;
-}
+// Create database connection
+const createDbConnection = () => {
+  return new Client({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  });
+};
 
 export default async function handler(req, res) {
   setCORS(res);
@@ -52,64 +44,76 @@ export default async function handler(req, res) {
       });
     }
 
-    // Find user
-    const user = await prisma.users.findFirst({
-      where: { 
-        email: email.toLowerCase(),
-        deleted_at: null,
-      },
-    });
+    // Connect to database
+    const client = createDbConnection();
+    await client.connect();
 
-    if (!user) {
-      return res.status(401).json({
-        error: 'Authentication failed',
-        message: 'Invalid email or password',
-      });
+    try {
+      // Find user
+      const userQuery = `
+        SELECT id, firstname, lastname, displayname, phone, email, password
+        FROM users 
+        WHERE email = $1 AND deleted_at IS NULL
+        LIMIT 1
+      `;
+      const userResult = await client.query(userQuery, [email.toLowerCase()]);
+
+      if (userResult.rows.length === 0) {
+        return res.status(401).json({
+          error: 'Authentication failed',
+          message: 'Invalid email or password',
+        });
+      }
+
+      const user = userResult.rows[0];
+
+      // Check password
+      const isPasswordValid = await bcrypt.compare(password, user.password);
+      if (!isPasswordValid) {
+        return res.status(401).json({
+          error: 'Authentication failed',
+          message: 'Invalid email or password',
+        });
+      }
+    } finally {
+      // Always close the connection
+      await client.end();
     }
 
-    // Check password
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
-      return res.status(401).json({
-        error: 'Authentication failed',
-        message: 'Invalid email or password',
-      });
-    }
+      // Generate token
+      const tokenPayload = {
+        id: user.id,
+        email: user.email,
+        firstname: user.firstname,
+        lastname: user.lastname,
+        displayname: user.displayname,
+      };
 
-    // Generate token
-    const tokenPayload = {
-      id: user.id,
-      email: user.email,
-      firstname: user.firstname,
-      lastname: user.lastname,
-      displayname: user.displayname,
-    };
+      const token = jwt.sign(
+        tokenPayload, 
+        process.env.JWT_SECRET || 'fallback-secret-key',
+        { 
+          expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+          issuer: 'money-manage-api',
+          audience: 'money-manage-app',
+        }  
+      );
 
-    const token = jwt.sign(
-      tokenPayload, 
-      process.env.JWT_SECRET || 'fallback-secret-key',
-      { 
-        expiresIn: process.env.JWT_EXPIRES_IN || '7d',
-        issuer: 'money-manage-api',
-        audience: 'money-manage-app',
-      }  
-    );
-
-    return res.status(200).json({
-      success: true,
-      message: 'Login successful',
-      data: {
-        user: {
-          id: user.id,
-          email: user.email,
-          firstname: user.firstname,
-          lastname: user.lastname,
-          displayname: user.displayname,
-          phone: user.phone,
+      return res.status(200).json({
+        success: true,
+        message: 'Login successful',
+        data: {
+          user: {
+            id: user.id,
+            email: user.email,
+            firstname: user.firstname,
+            lastname: user.lastname,
+            displayname: user.displayname,
+            phone: user.phone,
+          },
+          token,
         },
-        token,
-      },
-    });
+      });
 
   } catch (error) {
     console.error('Login error:', error);
