@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getAllAccounts, createAccount, updateAccount, deleteAccount } from '@/lib/accounts';
 import { getAuthToken } from '@/lib/auth';
+import { Account, AccountFormData } from '@/lib/types';
 
 // --- ไอคอน SVG ---
 const ArrowLeftIcon = () => (
@@ -113,15 +114,7 @@ const WalletIcon = () => (
   </svg>
 );
 
-// --- ประเภทข้อมูล (Interfaces) ---
-interface Account {
-  id: string;
-  name: string;
-  amount: string; // เปลี่ยนจาก initial_balance เป็น amount ตาม schema
-  user_id: string;
-  created_at: string;
-  updated_at: string;
-}
+// Account interface imported from lib/types.ts
 
 /**
  * หน้าจัดการบัญชี (Accounts Page)
@@ -152,7 +145,7 @@ function AccountsPage() {
         const response = await getAllAccounts();
         console.log("Accounts loaded:", response);
         
-        if (response.success) {
+        if (response.success && response.data) {
           setAccounts(response.data);
         } else {
           setError(response.message || 'ไม่สามารถโหลดข้อมูลบัญชีได้');
@@ -223,11 +216,7 @@ function AccountsPage() {
   /**
    * จัดการการบันทึก (ทั้งเพิ่มและแก้ไข)
    */
-  const handleSaveAccount = async (formData: {
-    id: string | null;
-    name: string;
-    amount: number;
-  }) => {
+  const handleSaveAccount = async (formData: AccountFormData) => {
     try {
       console.log("Saving account:", formData);
       
@@ -238,10 +227,10 @@ function AccountsPage() {
           amount: formData.amount
         });
         
-        if (response.success) {
+        if (response.success && response.data) {
           setAccounts((prev) =>
             prev.map((acc) =>
-              acc.id === formData.id ? response.data : acc
+              acc.id === formData.id ? response.data! : acc
             )
           );
           showToastMessage("แก้ไขบัญชีสำเร็จ!");
@@ -256,8 +245,8 @@ function AccountsPage() {
           amount: formData.amount
         });
         
-        if (response.success) {
-          setAccounts((prev) => [...prev, response.data]);
+        if (response.success && response.data) {
+          setAccounts((prev) => [...prev, response.data!]);
           showToastMessage("เพิ่มบัญชีสำเร็จ!");
         } else {
           setError(response.message || 'ไม่สามารถสร้างบัญชีได้');
@@ -356,7 +345,7 @@ function AccountsPage() {
                         </p>
                         <p className="text-sm text-gray-500">
                           ยอดคงเหลือ:{" "}
-                          {parseFloat(account.amount).toLocaleString("th-TH")} ฿
+                          {parseFloat(account.balance || account.amount).toLocaleString("th-TH")} ฿
                         </p>
                       </div>
                     </div>
@@ -444,11 +433,7 @@ function AccountsPage() {
 interface AccountModalProps {
   account: Account | null; // null = เพิ่มใหม่, Object = แก้ไข
   onClose: () => void;
-  onSave: (formData: {
-    id: string | null;
-    name: string;
-    amount: number;
-  }) => void;
+  onSave: (formData: AccountFormData) => void;
 }
 
 const AccountModal: React.FC<AccountModalProps> = ({
@@ -458,7 +443,7 @@ const AccountModal: React.FC<AccountModalProps> = ({
 }) => {
   const [name, setName] = useState<string>(account?.name || "");
   const [amount, setAmount] = useState<number>(
-    account ? parseFloat(account.amount) : 0
+    account ? parseFloat(account.balance || account.amount) : 0
   );
   const [error, setError] = useState<string>("");
 

@@ -2,8 +2,9 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from 'next/navigation';
 import { getUserData, removeAuthToken, removeUserData, getAuthToken } from '@/lib/auth';
-import { getAllAccounts, Account } from '@/lib/accounts';
+import { getAllAccounts } from '@/lib/accounts';
 import { getAllTransactions } from '@/lib/transactions';
+import { Account, Transaction } from '@/lib/types';
 import AuthGuard from '@/components/AuthGuard';
 
 // --- ไอคอน SVG ---

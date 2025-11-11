@@ -1,8 +1,9 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { useRouter } from 'next/navigation';
-import { getAllTransactions, Transaction as ApiTransaction } from '@/lib/transactions';
+import { getAllTransactions } from '@/lib/transactions';
 import { getAuthToken } from '@/lib/auth';
+import { Transaction } from '@/lib/types';
 
 // --- ไอคอน SVG ---
 const ArrowLeftIcon = () => (
@@ -111,7 +112,7 @@ function HistoryPage() {
   const [totalItems, setTotalItems] = useState(0);
 
   // แปลงข้อมูลจาก API เป็น DisplayTransaction format
-  const transformApiTransaction = (apiTx: ApiTransaction): DisplayTransaction => {
+  const transformApiTransaction = (apiTx: Transaction): DisplayTransaction => {
     // กำหนด type ตามประเภทของ category
     let type: TransactionType = "expense"; // default
     

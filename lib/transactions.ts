@@ -4,77 +4,14 @@
  */
 
 import { getAuthToken as getAuthTokenFromAuth } from './auth';
+import { Transaction, TransactionFormData, ApiResponse } from './types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 
   (process.env.NODE_ENV === 'production' 
     ? 'https://money-manage-five-gold.vercel.app/api'
     : 'http://localhost:3000/api');
 
-// Interface สำหรับ Transaction
-export interface Transaction {
-  id: string;
-  amount: string; // BigInt จาก database จะมาเป็น string
-  description?: string;
-  date: string; // ฟิลด์ date แทน transaction_date
-  created_at: string;
-  updated_at?: string;
-  user_id: string;
-  account_id: string;
-  category_id: string;
-  type_id: string;
-  related_account_id?: string;
-  account: {
-    id: string;
-    name: string;
-    amount: string;
-    user_id: string;
-    created_at?: string;
-    updated_at?: string;
-    deleted_at?: string;
-  };
-  category: {
-    id: string;
-    name: string;
-    user_id: string;
-    type_id: string;
-    created_at?: string;
-    updated_at?: string;
-    deleted_at?: string;
-    type: {
-      id: string;
-      name: string;
-      created_at?: string;
-      updated_at?: string;
-    };
-  };
-  type: {
-    id: string;
-    name: string;
-    created_at?: string;
-    updated_at?: string;
-  };
-  related_account?: {
-    id: string;
-    name: string;
-    amount: string;
-    user_id: string;
-    created_at?: string;
-    updated_at?: string;
-    deleted_at?: string;
-  } | null;
-}
-
-// Interface สำหรับ Response
-interface ApiResponse<T> {
-  success: boolean;
-  data?: T;
-  message?: string;
-  error?: string;
-  errorCode?: string;
-  field?: string;
-  status?: number;
-  details?: unknown;
-}
+// Using interfaces from lib/types.ts
 
 // Interface สำหรับ Pagination
 interface PaginatedResponse<T> {
@@ -113,10 +50,8 @@ function buildErrorResponse<T>(
   return {
     success: false,
     error: (payload.message as string) || error.message || 'Unknown error',
-    errorCode: payload.error as string | undefined,
     field: payload.field as string | undefined,
-    details: payload.details,
-    status: options.status,
+    message: (payload.message as string) || error.message || 'Unknown error'
   };
 }
 
@@ -131,10 +66,8 @@ function buildPaginatedErrorResponse<T>(
   return {
     success: false,
     error: (payload.message as string) || error.message || 'Unknown error',
-    errorCode: payload.error as string | undefined,
     field: payload.field as string | undefined,
-    details: payload.details,
-    status: options.status,
+    message: (payload.message as string) || error.message || 'Unknown error'
   };
 }
 

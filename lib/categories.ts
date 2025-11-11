@@ -1,34 +1,11 @@
 import { getAuthToken as getAuthTokenFromAuth } from './auth';
+import { Category, CategoryFormData, ApiResponse } from './types';
 
 // API Configuration
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 
   (process.env.NODE_ENV === 'production' 
     ? 'https://money-manage-five-gold.vercel.app/api'
-    : 'http://localhost:3000/api');// Types
-export interface Category {
-  id: string;
-  name: string;
-  user_id: string;
-  type_id: string;
-  created_at: string;
-  updated_at?: string;
-  deleted_at?: string;
-  type: {
-    id: string;
-    name: string;
-  };
-}
-
-export interface CategoryFormData {
-  name: string;
-  type_id: string;
-}
-
-export interface CategoryResponse {
-  success: boolean;
-  message?: string;
-  data?: Category | Category[];
-}
+    : 'http://localhost:3000/api');
 
 /**
  * Handle API Response
@@ -80,7 +57,7 @@ const getAuthHeader = (): Record<string, string> => {
 /**
  * Get all categories
  */
-export const getAllCategories = async (): Promise<CategoryResponse> => {
+export const getAllCategories = async (): Promise<ApiResponse<Category[]>> => {
   try {
     const token = getAuthToken();
     if (!token) {
@@ -116,7 +93,7 @@ export const getAllCategories = async (): Promise<CategoryResponse> => {
 /**
  * Get categories by type (filter จาก getAllCategories)
  */
-export const getCategoriesByType = async (typeId: string): Promise<CategoryResponse> => {
+export const getCategoriesByType = async (typeId: string): Promise<ApiResponse<Category[]>> => {
   try {
     console.log('Getting categories by type:', typeId);
     const allCategoriesResponse = await getAllCategories();
@@ -162,7 +139,7 @@ export const getCategoriesByType = async (typeId: string): Promise<CategoryRespo
 /**
  * Get category by ID
  */
-export const getCategoryById = async (id: string): Promise<CategoryResponse> => {
+export const getCategoryById = async (id: string): Promise<ApiResponse<Category>> => {
   try {
     const response = await fetch(`${API_BASE_URL}/categories/${id}`, {
       method: 'GET',
@@ -179,7 +156,7 @@ export const getCategoryById = async (id: string): Promise<CategoryResponse> => 
 /**
  * Create new category
  */
-export const createCategory = async (categoryData: CategoryFormData): Promise<CategoryResponse> => {
+export const createCategory = async (categoryData: CategoryFormData): Promise<ApiResponse<Category>> => {
   try {
     const response = await fetch(`${API_BASE_URL}/categories`, {
       method: 'POST',
@@ -197,7 +174,7 @@ export const createCategory = async (categoryData: CategoryFormData): Promise<Ca
 /**
  * Update category (ใช้ PATCH method สำหรับ partial updates)
  */
-export const updateCategory = async (id: string, categoryData: Partial<CategoryFormData>): Promise<CategoryResponse> => {
+export const updateCategory = async (id: string, categoryData: Partial<CategoryFormData>): Promise<ApiResponse<Category>> => {
   try {
     const response = await fetch(`${API_BASE_URL}/categories/${id}`, {
       method: 'PATCH',
@@ -215,7 +192,7 @@ export const updateCategory = async (id: string, categoryData: Partial<CategoryF
 /**
  * Delete category
  */
-export const deleteCategory = async (id: string): Promise<CategoryResponse> => {
+export const deleteCategory = async (id: string): Promise<ApiResponse<any>> => {
   try {
     const response = await fetch(`${API_BASE_URL}/categories/${id}`, {
       method: 'DELETE',

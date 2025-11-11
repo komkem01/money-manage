@@ -90,7 +90,7 @@ type CategoryType = "Expense" | "Income" | "Transfer";
 
 interface TypeConfig {
   id: string;
-  name: CategoryType;
+  name: string; // เปลี่ยนจาก CategoryType เป็น string เพื่อรองรับข้อมูลจาก database
   label: string;
   description: string;
   icon: React.ReactElement;

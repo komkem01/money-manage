@@ -1,20 +1,6 @@
 // Account API functions
 
-// Interface definitions
-export interface Account {
-  id: string;
-  name: string;
-  balance: string;
-  user_id: string;
-  type_id: string;
-  created_at: string;
-  updated_at?: string;
-  deleted_at?: string;
-  type: {
-    id: string;
-    name: string;
-  };
-}
+import { Account, ApiResponse, AccountFormData } from './types';
 
 import { getAuthToken as getAuthTokenFromAuth } from './auth';
 
@@ -53,15 +39,14 @@ export const getAuthToken = (): string | null => {
 /**
  * ดึงบัญชีทั้งหมดของผู้ใช้
  */
-export const getAllAccounts = async () => {
+export const getAllAccounts = async (): Promise<ApiResponse<Account[]>> => {
   try {
     const token = getAuthToken();
     if (!token) {
       console.error('No authentication token found in getAllAccounts');
       return {
         success: false,
-        message: 'Authentication token not found',
-        data: null
+        message: 'Authentication token not found'
       };
     }
 
@@ -82,8 +67,7 @@ export const getAllAccounts = async () => {
       console.error('Accounts API error:', data);
       return {
         success: false,
-        message: data.message || 'Failed to fetch accounts',
-        data: null
+        message: data.message || 'Failed to fetch accounts'
       };
     }
 
@@ -92,8 +76,7 @@ export const getAllAccounts = async () => {
     console.error('Get accounts error:', error);
     return {
       success: false,
-      message: error.message || 'Network error',
-      data: null
+      message: error.message || 'Network error'
     };
   }
 };
@@ -101,7 +84,7 @@ export const getAllAccounts = async () => {
 /**
  * ดึงบัญชีเดียว
  */
-export const getAccountById = async (accountId: string) => {
+export const getAccountById = async (accountId: string): Promise<ApiResponse<Account>> => {
   try {
     const token = getAuthToken();
     if (!token) {
@@ -135,7 +118,7 @@ export const getAccountById = async (accountId: string) => {
 export const createAccount = async (accountData: {
   name: string;
   amount: number;
-}) => {
+}): Promise<ApiResponse<Account>> => {
   try {
     const token = getAuthToken();
     if (!token) {
@@ -170,7 +153,7 @@ export const createAccount = async (accountData: {
 export const updateAccount = async (accountId: string, accountData: {
   name?: string;
   amount?: number;
-}) => {
+}): Promise<ApiResponse<Account>> => {
   try {
     const token = getAuthToken();
     if (!token) {
@@ -202,7 +185,7 @@ export const updateAccount = async (accountId: string, accountData: {
 /**
  * ลบบัญชี
  */
-export const deleteAccount = async (accountId: string) => {
+export const deleteAccount = async (accountId: string): Promise<ApiResponse<any>> => {
   try {
     const token = getAuthToken();
     if (!token) {

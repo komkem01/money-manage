@@ -1,13 +1,103 @@
-// API Configuration
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 
-  (process.env.NODE_ENV === 'production' 
-    ? 'https://money-manage-five-gold.vercel.app/api'
-    : 'http://localhost:3000/api');// Types
-export interface Type {
+// Global TypeScript interfaces for the Money Management System
+// Based on database schema
+
+export interface User {
   id: string;
-  name: 'Income' | 'Expense' | 'Transfer';
+  firstname?: string;
+  lastname?: string;
+  displayname?: string;
+  phone?: string;
+  email: string;
+  password: string;
+  created_at?: string;
+  updated_at?: string;
+  deleted_at?: string;
 }
 
+export interface Type {
+  id: string;
+  name: string; // 'income', 'expense', 'transfer'
+}
+
+export interface Account {
+  id: string;
+  user_id: string;
+  name: string;
+  amount: string; // numeric in database, string for precision
+  created_at?: string;
+  updated_at?: string;
+  deleted_at?: string;
+  // Virtual fields for UI
+  balance?: string; // alias for amount
+}
+
+export interface Category {
+  id: string;
+  user_id: string;
+  type_id: string;
+  name: string;
+  created_at?: string;
+  updated_at?: string;
+  deleted_at?: string;
+  // Relations
+  type?: Type;
+}
+
+export interface Transaction {
+  id: string;
+  user_id: string;
+  type_id: string;
+  category_id: string;
+  account_id: string;
+  related_account_id?: string; // for transfers
+  date: string; // bigint timestamp
+  description?: string;
+  amount: string; // numeric in database, string for precision
+  created_at?: string;
+  updated_at?: string;
+  deleted_at?: string;
+  // Relations
+  type?: Type;
+  category?: Category;
+  account?: Account;
+  related_account?: Account;
+}
+
+// API Response types
+export interface ApiResponse<T = any> {
+  success: boolean;
+  data?: T;
+  message?: string;
+  error?: string;
+  field?: string;
+  count?: number;
+}
+
+// Form data types
+export interface AccountFormData {
+  id?: string | null;
+  name: string;
+  amount: number;
+}
+
+export interface CategoryFormData {
+  id?: string | null;
+  name: string;
+  type_id: string;
+}
+
+export interface TransactionFormData {
+  id?: string | null;
+  type_id: string;
+  category_id: string;
+  account_id: string;
+  related_account_id?: string;
+  date: string;
+  description?: string;
+  amount: number;
+}
+
+// Legacy type for backward compatibility
 export interface TypeResponse {
   success: boolean;
   message?: string;
@@ -57,6 +147,12 @@ const getAuthToken = () => {
   }
   return null;
 };
+
+// API Configuration
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 
+  (process.env.NODE_ENV === 'production' 
+    ? 'https://money-manage-five-gold.vercel.app/api'
+    : 'http://localhost:3000/api');
 
 /**
  * Get all types (ไม่ต้องใช้ authentication)

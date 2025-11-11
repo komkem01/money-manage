@@ -1,10 +1,11 @@
 "use client";
 import React, { useState, useMemo, useEffect } from "react";
 import { useRouter } from 'next/navigation';
-import { getAllTransactions, deleteTransaction, updateTransaction, Transaction as ApiTransaction } from '@/lib/transactions';
-import { getAllAccounts, Account } from '@/lib/accounts';
-import { getAllCategories, Category } from '@/lib/categories';
+import { getAllTransactions, deleteTransaction, updateTransaction } from '@/lib/transactions';
+import { getAllAccounts } from '@/lib/accounts';
+import { getAllCategories } from '@/lib/categories';
 import { getAuthToken } from '@/lib/auth';
+import { Transaction, Account, Category } from '@/lib/types';
 import AuthGuard from '@/components/AuthGuard';
 
 // --- ไอคอน SVG ---
@@ -170,7 +171,7 @@ function TransactionListPage() {
   const [isUpdating, setIsUpdating] = useState(false);
 
   // Transform API transaction to display transaction
-  const transformApiTransaction = (apiTx: ApiTransaction): DisplayTransaction => {
+  const transformApiTransaction = (apiTx: Transaction): DisplayTransaction => {
     let type: TransactionType = "expense";
     
     if (apiTx.category?.type?.name === "Income") {

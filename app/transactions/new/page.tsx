@@ -2,9 +2,10 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from 'next/navigation';
 import { createTransaction } from '@/lib/transactions';
-import { getAllAccounts, Account } from '@/lib/accounts';
-import { getAllCategories, Category } from '@/lib/categories';
+import { getAllAccounts } from '@/lib/accounts';
+import { getAllCategories } from '@/lib/categories';
 import { getAuthToken } from '@/lib/auth';
+import { Account, Category } from '@/lib/types';
 import AuthGuard from '@/components/AuthGuard';
 
 // --- ไอคอน SVG ---
