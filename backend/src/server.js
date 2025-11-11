@@ -108,8 +108,7 @@ if (process.env.NODE_ENV !== 'production') {
     console.log(`📋 API Base URL: http://192.168.1.44:${PORT}/api`);
     console.log('=====================================');
   });
-} else {
-  console.log('🚀 Money Management API deployed on serverless (Vercel)');
 }
 
+// Export for Vercel serverless and local development
 module.exports = app;
