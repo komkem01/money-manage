@@ -2,7 +2,7 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 
   (process.env.NODE_ENV === 'production' 
     ? 'https://money-manage-five-gold.vercel.app/api'
-    : 'http://192.168.1.44:5000/api');// Types
+    : 'http://localhost:3000/api');// Types
 export interface User {
   id: string;
   firstname: string;
@@ -68,7 +68,7 @@ const handleResponse = async (response: Response) => {
  */
 export const registerUser = async (userData: RegisterData): Promise<AuthResponse> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/auth/register`, {
+    const response = await fetch(`${API_BASE_URL}/register`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -88,7 +88,7 @@ export const registerUser = async (userData: RegisterData): Promise<AuthResponse
  */
 export const loginUser = async (loginData: LoginData): Promise<AuthResponse> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/auth/login`, {
+    const response = await fetch(`${API_BASE_URL}/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

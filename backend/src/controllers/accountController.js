@@ -1,4 +1,4 @@
-const prisma = require('../utils/prisma');
+const { query, transaction } = require('../utils/db');
 
 /**
  * ดึงบัญชีทั้งหมดของผู้ใช้
@@ -7,22 +7,17 @@ const getAllAccounts = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const accounts = await prisma.accounts.findMany({
-      where: {
-        user_id: userId
-      },
-      orderBy: {
-        created_at: 'desc'
-      }
-    });
+    const result = await query(
+      `SELECT * FROM accounts 
+       WHERE user_id = $1 AND deleted_at IS NULL
+       ORDER BY created_at DESC`,
+      [userId]
+    );
 
-    // แปลง BigInt เป็น string สำหรับ JSON serialization
-    const serializedAccounts = accounts.map(account => ({
+    // แปลงข้อมูลให้เหมาะสมกับ frontend
+    const serializedAccounts = result.rows.map(account => ({
       ...account,
-      id: account.id.toString(),
-      user_id: account.user_id.toString(),
-      balance: account.amount.toString(),  // Map amount to balance for frontend
-      amount: account.amount.toString(),   // Keep original field for backward compatibility
+      balance: account.amount,  // Map amount to balance for frontend
       created_at: account.created_at ? account.created_at.toString() : null,
       updated_at: account.updated_at ? account.updated_at.toString() : null
     }));
@@ -64,14 +59,12 @@ const createAccount = async (req, res) => {
     }
 
     // ตรวจสอบว่ามีบัญชีชื่อนี้แล้วหรือไม่
-    const existingAccount = await prisma.accounts.findFirst({
-      where: {
-        user_id: userId,
-        name: name.trim()
-      }
-    });
+    const existingResult = await query(
+      'SELECT id FROM accounts WHERE user_id = $1 AND name = $2 AND deleted_at IS NULL',
+      [userId, name.trim()]
+    );
 
-    if (existingAccount) {
+    if (existingResult.rows.length > 0) {
       return res.status(400).json({
         success: false,
         message: 'มีบัญชีชื่อนี้อยู่แล้ว'
@@ -79,23 +72,20 @@ const createAccount = async (req, res) => {
     }
 
     // สร้างบัญชีใหม่
-    const newAccount = await prisma.accounts.create({
-      data: {
-        name: name.trim(),
-        amount: parseFloat(initial_balance),
-        user_id: userId,
-        created_at: BigInt(Date.now()),
-        updated_at: BigInt(Date.now())
-      }
-    });
+    const now = Date.now().toString();
+    const newAccountResult = await query(
+      `INSERT INTO accounts (name, amount, user_id, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [name.trim(), parseFloat(initial_balance), userId, now, now]
+    );
 
-    // แปลง BigInt เป็น string
+    const newAccount = newAccountResult.rows[0];
+
+    // แปลงข้อมูลให้เหมาะสมกับ frontend
     const serializedAccount = {
       ...newAccount,
-      id: newAccount.id.toString(),
-      user_id: newAccount.user_id.toString(),
-      balance: newAccount.amount.toString(),  // Map amount to balance for frontend
-      amount: newAccount.amount.toString(),   // Keep original field for backward compatibility
+      balance: newAccount.amount,
       created_at: newAccount.created_at ? newAccount.created_at.toString() : null,
       updated_at: newAccount.updated_at ? newAccount.updated_at.toString() : null
     };

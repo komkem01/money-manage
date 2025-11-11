@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 const { generateToken } = require('../utils/jwt');
-const prisma = require('../utils/prisma');
+const { query } = require('../utils/db');
 
 /**
  * สมัครสมาชิกใหม่
@@ -18,14 +18,12 @@ const register = async (req, res) => {
     } = req.body;
 
     // ตรวจสอบว่ามี email นี้อยู่ในระบบแล้วหรือไม่
-    const existingUser = await prisma.users.findFirst({
-      where: { 
-        email: email.toLowerCase(),
-        deleted_at: null, // ไม่นับ user ที่ถูก soft delete
-      },
-    });
+    const existingUserResult = await query(
+      'SELECT id FROM users WHERE LOWER(email) = LOWER($1) AND deleted_at IS NULL',
+      [email]
+    );
 
-    if (existingUser) {
+    if (existingUserResult.rows.length > 0) {
       return res.status(400).json({
         error: 'Registration failed',
         message: 'Email address is already registered.',
@@ -37,30 +35,17 @@ const register = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
     // สร้าง timestamp
-    const now = BigInt(Date.now());
+    const now = Date.now().toString();
 
     // สร้าง user ใหม่
-    const newUser = await prisma.users.create({
-      data: {
-        firstname: firstname || null,
-        lastname: lastname || null,
-        displayname: displayname || null,
-        phone: phone || null,
-        email: email.toLowerCase(),
-        password: hashedPassword,
-        created_at: now,
-        updated_at: now,
-      },
-      select: {
-        id: true,
-        firstname: true,
-        lastname: true,
-        displayname: true,
-        phone: true,
-        email: true,
-        created_at: true,
-      },
-    });
+    const newUserResult = await query(
+      `INSERT INTO users (firstname, lastname, displayname, phone, email, password, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, LOWER($5), $6, $7, $8)
+       RETURNING id, firstname, lastname, displayname, phone, email, created_at`,
+      [firstname || null, lastname || null, displayname || null, phone || null, email, hashedPassword, now, now]
+    );
+
+    const newUser = newUserResult.rows[0];
 
     // สร้าง JWT token
     const token = generateToken({
@@ -68,7 +53,7 @@ const register = async (req, res) => {
       email: newUser.email,
     });
 
-    // ส่งข้อมูลกลับ (แปลง BigInt)
+    // ส่งข้อมูลกลับ
     res.status(201).json({
       success: true,
       message: 'User registered successfully',
@@ -100,19 +85,19 @@ const login = async (req, res) => {
     const { email, password } = req.body;
 
     // ค้นหา user จาก email
-    const user = await prisma.users.findFirst({
-      where: { 
-        email: email.toLowerCase(),
-        deleted_at: null, // ไม่นับ user ที่ถูก soft delete
-      },
-    });
+    const userResult = await query(
+      'SELECT * FROM users WHERE LOWER(email) = LOWER($1) AND deleted_at IS NULL',
+      [email]
+    );
 
-    if (!user) {
+    if (userResult.rows.length === 0) {
       return res.status(401).json({
         error: 'Login failed',
         message: 'Invalid email or password.',
       });
     }
+
+    const user = userResult.rows[0];
 
     // ตรวจสอบรหัสผ่าน
     const isValidPassword = await bcrypt.compare(password, user.password);
@@ -125,11 +110,11 @@ const login = async (req, res) => {
     }
 
     // อัปเดต updated_at
-    const now = BigInt(Date.now());
-    await prisma.users.update({
-      where: { id: user.id },
-      data: { updated_at: now },
-    });
+    const now = Date.now().toString();
+    await query(
+      'UPDATE users SET updated_at = $1 WHERE id = $2',
+      [now, user.id]
+    );
 
     // สร้าง JWT token
     const token = generateToken({
@@ -137,7 +122,7 @@ const login = async (req, res) => {
       email: user.email,
     });
 
-    // ส่งข้อมูลกลับ (ไม่รวม password และแปลง BigInt)
+    // ส่งข้อมูลกลับ (ไม่รวม password)
     const { password: _, created_at, updated_at, deleted_at, ...userWithoutPassword } = user;
     
     res.json({
@@ -230,27 +215,15 @@ const updateProfile = async (req, res) => {
     const { firstname, lastname, displayname, phone } = req.body;
 
     // อัปเดตข้อมูล user
-    const now = BigInt(Date.now());
-    const updatedUser = await prisma.users.update({
-      where: { id: userId },
-      data: {
-        firstname: firstname || null,
-        lastname: lastname || null,
-        displayname: displayname || null,
-        phone: phone || null,
-        updated_at: now,
-      },
-      select: {
-        id: true,
-        firstname: true,
-        lastname: true,
-        displayname: true,
-        phone: true,
-        email: true,
-        created_at: true,
-        updated_at: true,
-      },
-    });
+    const now = Date.now().toString();
+    const updatedUserResult = await query(
+      `UPDATE users SET firstname = $1, lastname = $2, displayname = $3, phone = $4, updated_at = $5
+       WHERE id = $6
+       RETURNING id, firstname, lastname, displayname, phone, email, created_at, updated_at`,
+      [firstname || null, lastname || null, displayname || null, phone || null, now, userId]
+    );
+
+    const updatedUser = updatedUserResult.rows[0];
 
     res.json({
       success: true,
@@ -284,16 +257,19 @@ const changePassword = async (req, res) => {
     const { currentPassword, newPassword } = req.body;
 
     // ดึงข้อมูล user เพื่อตรวจสอบรหัสผ่านเก่า
-    const user = await prisma.users.findUnique({
-      where: { id: userId },
-    });
+    const userResult = await query(
+      'SELECT id, password FROM users WHERE id = $1',
+      [userId]
+    );
 
-    if (!user) {
+    if (userResult.rows.length === 0) {
       return res.status(404).json({
         error: 'User not found',
         message: 'User account not found.',
       });
     }
+
+    const user = userResult.rows[0];
 
     // ตรวจสอบรหัสผ่านเก่า
     const isValidCurrentPassword = await bcrypt.compare(currentPassword, user.password);
@@ -310,14 +286,11 @@ const changePassword = async (req, res) => {
     const hashedNewPassword = await bcrypt.hash(newPassword, saltRounds);
 
     // อัปเดตรหัสผ่าน
-    const now = BigInt(Date.now());
-    await prisma.users.update({
-      where: { id: userId },
-      data: {
-        password: hashedNewPassword,
-        updated_at: now,
-      },
-    });
+    const now = Date.now().toString();
+    await query(
+      'UPDATE users SET password = $1, updated_at = $2 WHERE id = $3',
+      [hashedNewPassword, now, userId]
+    );
 
     res.json({
       success: true,

@@ -4,5 +4,15 @@
     "api/**/*.js": {
       "maxDuration": 30
     }
-  }
+  },
+  "rewrites": [
+    {
+      "source": "/api/auth/login",
+      "destination": "/api/login"
+    },
+    {
+      "source": "/api/auth/register",
+      "destination": "/api/register"
+    }
+  ]
 }

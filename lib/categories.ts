@@ -4,7 +4,7 @@ import { getAuthToken as getAuthTokenFromAuth } from './auth';
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 
   (process.env.NODE_ENV === 'production' 
     ? 'https://money-manage-five-gold.vercel.app/api'
-    : 'http://192.168.1.44:5000/api');// Types
+    : 'http://localhost:3000/api');// Types
 export interface Category {
   id: string;
   name: string;
