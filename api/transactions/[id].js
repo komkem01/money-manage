@@ -278,9 +278,19 @@ const handler = async (req, res) => {
           // ตรวจสอบยอดเงินคงเหลือสำหรับ Expense และ Transfer
           if (newTypeName === 'Transfer' || newTypeName === 'Expense') {
             const accountResult = await client.query(
-              'SELECT name, amount FROM accounts WHERE id = $1 AND deleted_at IS NULL',
-              [newAccountId]
+              'SELECT name, amount FROM accounts WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
+              [newAccountId, userId]
             );
+
+            if (accountResult.rows.length === 0) {
+              await client.query('ROLLBACK');
+              return res.status(404).json({
+                success: false,
+                error: 'ACCOUNT_NOT_FOUND',
+                message: '❌ ไม่พบบัญชีที่ระบุ',
+                field: 'account_id'
+              });
+            }
 
             const currentBalance = parseFloat(accountResult.rows[0].amount);
             
@@ -330,9 +340,19 @@ const handler = async (req, res) => {
           if (category_id !== undefined) {
             // ต้องอัปเดต type_id ด้วย
             const categoryResult = await client.query(
-              'SELECT type_id FROM categories WHERE id = $1',
-              [category_id]
+              'SELECT type_id FROM categories WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
+              [category_id, userId]
             );
+
+            if (categoryResult.rows.length === 0) {
+              await client.query('ROLLBACK');
+              return res.status(404).json({
+                success: false,
+                error: 'CATEGORY_NOT_FOUND',
+                message: '❌ ไม่พบหมวดหมู่ที่ระบุ',
+                field: 'category_id'
+              });
+            }
             
             updates.push(`category_id = $${paramCount}`);
             values.push(category_id);
@@ -413,14 +433,51 @@ const handler = async (req, res) => {
 
           const updatedTransaction = updateResult.rows[0];
 
+          // ดึงข้อมูลเพิ่มเติมหลังอัปเดตเพื่อให้ response ครบถ้วน
+          const enrichedResult = await client.query(
+            `SELECT 
+              t.*,
+              a.name AS account_name,
+              a.amount AS account_balance,
+              ra.name AS related_account_name,
+              c.name AS category_name,
+              ty.name AS type_name
+             FROM transactions t
+             JOIN accounts a ON t.account_id = a.id
+             LEFT JOIN accounts ra ON t.related_account_id = ra.id
+             JOIN categories c ON t.category_id = c.id
+             JOIN types ty ON t.type_id = ty.id
+             WHERE t.id = $1`,
+            [updatedTransaction.id]
+          );
+
+          const enrichedTransaction = enrichedResult.rows[0] || updatedTransaction;
+
           return res.json({
             success: true,
             message: '✅ อัปเดตธุรกรรมสำเร็จ',
             data: {
-              ...updatedTransaction,
-              date: updatedTransaction.date ? updatedTransaction.date.toString() : null,
-              created_at: updatedTransaction.created_at ? updatedTransaction.created_at.toString() : null,
-              updated_at: updatedTransaction.updated_at ? updatedTransaction.updated_at.toString() : null
+              ...enrichedTransaction,
+              date: enrichedTransaction.date ? enrichedTransaction.date.toString() : null,
+              created_at: enrichedTransaction.created_at ? enrichedTransaction.created_at.toString() : null,
+              updated_at: enrichedTransaction.updated_at ? enrichedTransaction.updated_at.toString() : null,
+              account: enrichedTransaction.account_id ? {
+                id: enrichedTransaction.account_id,
+                name: enrichedTransaction.account_name,
+                amount: enrichedTransaction.account_balance
+              } : null,
+              category: enrichedTransaction.category_id ? {
+                id: enrichedTransaction.category_id,
+                name: enrichedTransaction.category_name
+              } : null,
+              type: enrichedTransaction.type_id ? {
+                id: enrichedTransaction.type_id,
+                name: enrichedTransaction.type_name
+              } : null,
+              related_account: enrichedTransaction.related_account_id ? {
+                id: enrichedTransaction.related_account_id,
+                name: enrichedTransaction.related_account_name
+              } : null
             }
           });
         } catch (error) {
