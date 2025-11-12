@@ -187,7 +187,7 @@ const convertToTransaction = async (id, accountId, userId) => {
     // Mark pending expense as paid
     const updatePendingQuery = `
       UPDATE pending_expenses 
-      SET status = 'paid', updated_at = CURRENT_TIMESTAMP
+      SET status = 'paid', updated_at = EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000
       WHERE id = $1 AND user_id = $2
       RETURNING *
     `;
