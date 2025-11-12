@@ -11,6 +11,7 @@ interface ConfirmModalProps {
   confirmLabel?: string;
   cancelLabel?: string;
   loading?: boolean;
+  disabled?: boolean;
   tone?: ConfirmTone;
   errorMessage?: string;
   onConfirm: () => void;
@@ -89,6 +90,7 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
   confirmLabel = 'ยืนยัน',
   cancelLabel = 'ยกเลิก',
   loading = false,
+  disabled = false,
   tone = 'danger',
   errorMessage,
   onConfirm,
@@ -140,8 +142,10 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
           </button>
           <button
             onClick={onConfirm}
-            disabled={loading}
-            className={`inline-flex items-center gap-2 rounded-xl px-5 py-2 text-sm font-semibold text-white shadow transition focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-90 ${palette.confirm} ${palette.confirmHover} ${palette.focusRing}`}
+            disabled={loading || disabled}
+            className={`inline-flex items-center gap-2 rounded-xl px-5 py-2 text-sm font-semibold text-white shadow transition focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
+              disabled ? 'bg-gray-400' : `${palette.confirm} ${palette.confirmHover} ${palette.focusRing}`
+            }`}
           >
             {loading && (
               <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4">

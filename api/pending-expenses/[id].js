@@ -133,7 +133,24 @@ const convertToTransaction = async (id, accountId, userId) => {
     const pendingExpense = await getPendingExpenseById(id, userId);
     
     if (pendingExpense.status === 'paid') {
-      throw new Error('Pending expense already paid');
+      throw new Error('รายจ่ายนี้จ่ายแล้ว');
+    }
+    
+    // Get and validate account balance
+    const accountQuery = 'SELECT * FROM accounts WHERE id = $1 AND user_id = $2';
+    const accountCheckResult = await client.query(accountQuery, [accountId, userId]);
+    
+    if (accountCheckResult.rows.length === 0) {
+      throw new Error('ไม่พบบัญชีที่เลือก');
+    }
+    
+    const currentAccount = accountCheckResult.rows[0];
+    const currentBalance = parseFloat(currentAccount.amount);
+    const expenseAmount = parseFloat(pendingExpense.amount);
+    
+    // Check if account has sufficient balance
+    if (currentBalance < expenseAmount) {
+      throw new Error(`ยอดเงินไม่เพียงพอ บัญชี ${currentAccount.name} มียอดคงเหลือ ${currentBalance.toLocaleString('th-TH')} บาท แต่ต้องจ่าย ${expenseAmount.toLocaleString('th-TH')} บาท`);
     }
     
     // Get expense type ID
@@ -141,7 +158,7 @@ const convertToTransaction = async (id, accountId, userId) => {
     const typeResult = await client.query(typeQuery);
     
     if (typeResult.rows.length === 0) {
-      throw new Error('Expense type not found');
+      throw new Error('ไม่พบประเภทรายจ่าย');
     }
     
     const expenseTypeId = typeResult.rows[0].id;
@@ -166,7 +183,7 @@ const convertToTransaction = async (id, accountId, userId) => {
     
     const transactionResult = await client.query(transactionQuery, transactionValues);
     
-    // Update account balance
+    // Update account balance (deduct expense amount)
     const updateAccountQuery = `
       UPDATE accounts 
       SET amount = amount - $1 
@@ -175,13 +192,19 @@ const convertToTransaction = async (id, accountId, userId) => {
     `;
     
     const accountResult = await client.query(updateAccountQuery, [
-      pendingExpense.amount,
+      expenseAmount,
       accountId,
       userId
     ]);
     
     if (accountResult.rows.length === 0) {
-      throw new Error('Account not found');
+      throw new Error('ไม่สามารถอัปเดตยอดเงินในบัญชีได้');
+    }
+    
+    // Verify the account balance didn't go negative (double check)
+    const updatedBalance = parseFloat(accountResult.rows[0].amount);
+    if (updatedBalance < 0) {
+      throw new Error('เกิดข้อผิดพลาด: ยอดเงินในบัญชีติดลบ');
     }
     
     // Mark pending expense as paid
@@ -198,7 +221,17 @@ const convertToTransaction = async (id, accountId, userId) => {
     
     return {
       transaction: transactionResult.rows[0],
-      account: accountResult.rows[0]
+      account: accountResult.rows[0],
+      pendingExpense: {
+        ...pendingExpense,
+        status: 'paid'
+      },
+      summary: {
+        expenseAmount: expenseAmount,
+        previousBalance: currentBalance,
+        newBalance: updatedBalance,
+        accountName: currentAccount.name
+      }
     };
     
   } catch (error) {
@@ -319,15 +352,20 @@ export default async function handler(req, res) {
         success: false,
         error: error.message
       });
-    } else if (error.message.includes('not found')) {
+    } else if (error.message.includes('not found') || error.message.includes('ไม่พบ')) {
       res.status(404).json({
+        success: false,
+        error: error.message
+      });
+    } else if (error.message.includes('ยอดเงินไม่เพียงพอ') || error.message.includes('already paid') || error.message.includes('จ่ายแล้ว')) {
+      res.status(400).json({
         success: false,
         error: error.message
       });
     } else {
       res.status(500).json({
         success: false,
-        error: error.message || 'Internal server error'
+        error: error.message || 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์'
       });
     }
   }

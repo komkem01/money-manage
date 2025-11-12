@@ -268,7 +268,16 @@ function PendingExpensesPage() {
               : exp
           )
         );
-        showToastMessage("แปลงเป็นธุรกรรมสำเร็จ!");
+        
+        // แสดงข้อความสำเร็จพร้อมรายละเอียด
+        if (response.data?.summary) {
+          const { summary } = response.data;
+          showToastMessage(
+            `แปลงเป็นธุรกรรมสำเร็จ! จ่าย ${summary.expenseAmount.toLocaleString('th-TH')} บาท จากบัญชี ${summary.accountName} (คงเหลือ ${summary.newBalance.toLocaleString('th-TH')} บาท)`
+          );
+        } else {
+          showToastMessage("แปลงเป็นธุรกรรมสำเร็จ!");
+        }
       } else {
         setError(response.message || 'ไม่สามารถแปลงเป็นธุรกรรมได้');
       }
@@ -595,6 +604,17 @@ function PendingExpensesPage() {
         message={
           <div className="space-y-4">
             <p>คุณต้องการแปลงรายจ่าย "{expensePendingConvert?.title}" เป็นธุรกรรมหรือไม่?</p>
+            
+            <div className="bg-blue-50 p-3 rounded-lg">
+              <h4 className="font-medium text-blue-800 mb-2">รายละเอียดรายจ่าย:</h4>
+              <p className="text-sm text-blue-700">
+                จำนวน: <span className="font-semibold">{parseFloat(expensePendingConvert?.amount || '0').toLocaleString("th-TH")} ฿</span>
+              </p>
+              <p className="text-sm text-blue-700">
+                หมวดหมู่: {expensePendingConvert?.category?.name}
+              </p>
+            </div>
+            
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 เลือกบัญชีที่จะหักเงิน:
@@ -604,18 +624,62 @@ function PendingExpensesPage() {
                 onChange={(e) => setSelectedAccountId(e.target.value)}
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
               >
-                {accounts.map(account => (
-                  <option key={account.id} value={account.id}>
-                    {account.name} ({parseFloat(account.balance || account.amount).toLocaleString("th-TH")} ฿)
-                  </option>
-                ))}
+                {accounts.map(account => {
+                  const balance = parseFloat(account.balance || account.amount);
+                  const expenseAmount = parseFloat(expensePendingConvert?.amount || '0');
+                  const insufficient = balance < expenseAmount;
+                  
+                  return (
+                    <option key={account.id} value={account.id} disabled={insufficient}>
+                      {account.name} ({balance.toLocaleString("th-TH")} ฿) 
+                      {insufficient ? ' - ยอดเงินไม่เพียงพอ' : ''}
+                    </option>
+                  );
+                })}
               </select>
+              
+              {(() => {
+                const selectedAccount = accounts.find(acc => acc.id === selectedAccountId);
+                if (selectedAccount && expensePendingConvert) {
+                  const balance = parseFloat(selectedAccount.balance || selectedAccount.amount);
+                  const expenseAmount = parseFloat(expensePendingConvert.amount);
+                  const remaining = balance - expenseAmount;
+                  
+                  return (
+                    <div className={`mt-2 p-2 rounded text-sm ${remaining >= 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                      <p>ยอดคงเหลือหลังจ่าย: <span className="font-semibold">{remaining.toLocaleString("th-TH")} ฿</span></p>
+                      {remaining < 0 && <p className="text-xs mt-1">⚠️ ยอดเงินไม่เพียงพอสำหรับการทำธุรกรรมนี้</p>}
+                    </div>
+                  );
+                }
+                return null;
+              })()}
             </div>
           </div>
         }
         confirmLabel={actionLoading ? 'กำลังแปลง...' : 'ยืนยันการแปลง'}
         cancelLabel="ยกเลิก"
         loading={actionLoading}
+        disabled={(() => {
+          const selectedAccount = accounts.find(acc => acc.id === selectedAccountId);
+          if (selectedAccount && expensePendingConvert) {
+            const balance = parseFloat(selectedAccount.balance || selectedAccount.amount);
+            const expenseAmount = parseFloat(expensePendingConvert.amount);
+            return balance < expenseAmount;
+          }
+          return false;
+        })()}
+        errorMessage={(() => {
+          const selectedAccount = accounts.find(acc => acc.id === selectedAccountId);
+          if (selectedAccount && expensePendingConvert) {
+            const balance = parseFloat(selectedAccount.balance || selectedAccount.amount);
+            const expenseAmount = parseFloat(expensePendingConvert.amount);
+            if (balance < expenseAmount) {
+              return `ยอดเงินในบัญชี "${selectedAccount.name}" ไม่เพียงพอ (ขาดอีก ${(expenseAmount - balance).toLocaleString("th-TH")} ฿)`;
+            }
+          }
+          return undefined;
+        })()}
         onCancel={() => {
           setConvertExpenseId(null);
           setSelectedAccountId("");
