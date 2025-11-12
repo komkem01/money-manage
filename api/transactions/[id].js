@@ -1,6 +1,43 @@
 const jwt = require('jsonwebtoken');
 const { getClient } = require('../_db');
 
+const normalizeTransactionDate = (input, { fallbackToNow = true } = {}) => {
+  if (input === undefined) {
+    return fallbackToNow ? Date.now() : undefined;
+  }
+
+  if (input === null) {
+    return fallbackToNow ? Date.now() : null;
+  }
+
+  if (typeof input === 'number') {
+    return Number.isFinite(input) ? input : NaN;
+  }
+
+  if (typeof input === 'string') {
+    const trimmed = input.trim();
+
+    if (trimmed.length === 0) {
+      return fallbackToNow ? Date.now() : null;
+    }
+
+    if (/^\d+$/.test(trimmed)) {
+      const parsed = Number(trimmed);
+      return Number.isFinite(parsed) ? parsed : NaN;
+    }
+
+    const parsed = Date.parse(trimmed);
+    return Number.isNaN(parsed) ? NaN : parsed;
+  }
+
+  if (input instanceof Date) {
+    const time = input.getTime();
+    return Number.isNaN(time) ? NaN : time;
+  }
+
+  return NaN;
+};
+
 const authenticate = (handler) => async (req, res) => {
   const client = await getClient();
   
@@ -328,9 +365,20 @@ const handler = async (req, res) => {
           }
 
           if (transactionDate !== undefined) {
-            const txDate = transactionDate ? new Date(transactionDate).getTime().toString() : Date.now().toString();
+            const normalizedDate = normalizeTransactionDate(transactionDate);
+
+            if (Number.isNaN(normalizedDate)) {
+              await client.query('ROLLBACK');
+              return res.status(400).json({
+                success: false,
+                error: 'INVALID_DATE',
+                message: '❌ วันที่ของธุรกรรมไม่ถูกต้อง',
+                field: 'date'
+              });
+            }
+
             updates.push(`date = $${paramCount}`);
-            values.push(txDate);
+            values.push(normalizedDate.toString());
             paramCount++;
           }
 
@@ -591,8 +639,6 @@ const handler = async (req, res) => {
         details: process.env.NODE_ENV === 'development' ? error.message : undefined,
         stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
       });
-    } finally {
-      client.release();
     }
   })(req, res);
 };

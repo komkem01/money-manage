@@ -489,43 +489,43 @@ function NewTransactionPage() {
       // --- ฟอร์มสำหรับ "โยกย้าย" ---
       return (
         <div className="space-y-4">
+        <div className="relative">
+          <label
+            htmlFor="transferCategory"
+            className="block text-sm font-semibold text-slate-700 mb-2"
+          >
+            หมวดหมู่การโยกย้าย
+          </label>
           <div className="relative">
-            <label
-              htmlFor="transferCategory"
-              className="block text-sm font-medium text-gray-700 mb-1"
+            <select
+              id="transferCategory"
+              value={transferCategory}
+              onChange={(e) => setTransferCategory(e.target.value)}
+              required
+              className="w-full pl-10 pr-4 py-3 border border-slate-300 text-slate-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-200 focus:border-slate-500 appearance-none shadow-sm"
             >
-              หมวดหมู่การโยกย้าย
-            </label>
-            <div className="relative">
-              <select
-                id="transferCategory"
-                value={transferCategory}
-                onChange={(e) => setTransferCategory(e.target.value)}
-                required
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
-              >
-                <option value="" disabled>
-                  เลือกหมวดหมู่
-                </option>
-                {categories
-                  .filter(cat => cat.type?.name === 'Transfer')
-                  .map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </option>
-                  ))}
-              </select>
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <TagIcon />
-              </div>
+              <option value="" disabled>
+                เลือกหมวดหมู่
+              </option>
+              {categories
+                .filter(cat => cat.type?.name === 'Transfer')
+                .map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </option>
+                ))}
+            </select>
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <TagIcon />
             </div>
           </div>
+        </div>
 
           {/* จากบัญชี */}
           <div className="relative">
             <label
               htmlFor="transferFromAccount"
-              className="block text-sm font-medium text-gray-700 mb-1"
+              className="block text-sm font-semibold text-slate-700 mb-2"
             >
               จากบัญชี
             </label>
@@ -535,7 +535,7 @@ function NewTransactionPage() {
                 value={transferFromAccount}
                 onChange={(e) => setTransferFromAccount(e.target.value)}
                 required
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
+                className="w-full pl-10 pr-4 py-3 border border-slate-300 text-slate-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-200 focus:border-slate-500 appearance-none shadow-sm"
               >
                 <option value="" disabled>
                   เลือกบัญชีต้นทาง
@@ -557,7 +557,7 @@ function NewTransactionPage() {
           <div className="relative">
             <label
               htmlFor="transferToAccount"
-              className="block text-sm font-medium text-gray-700 mb-1"
+              className="block text-sm font-semibold text-slate-700 mb-2"
             >
               ไปยังบัญชี
             </label>
@@ -567,7 +567,7 @@ function NewTransactionPage() {
                 value={transferToAccount}
                 onChange={(e) => setTransferToAccount(e.target.value)}
                 required
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
+                className="w-full pl-10 pr-4 py-3 border border-slate-300 text-slate-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-200 focus:border-slate-500 appearance-none shadow-sm"
               >
                 <option value="" disabled>
                   เลือกบัญชีปลายทาง
@@ -600,7 +600,7 @@ function NewTransactionPage() {
         <div className="relative">
           <label
             htmlFor="category"
-            className="block text-sm font-medium text-gray-700 mb-1"
+            className="block text-sm font-semibold text-slate-700 mb-2"
           >
             หมวดหมู่
           </label>
@@ -610,7 +610,7 @@ function NewTransactionPage() {
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
               required
-              className="w-full pl-10 pr-4 py-3 border border-gray-300 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
+              className="w-full pl-10 pr-4 py-3 border border-slate-300 text-slate-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-200 focus:border-slate-500 appearance-none shadow-sm"
             >
               <option value="" disabled>
                 เลือกหมวดหมู่
@@ -631,7 +631,7 @@ function NewTransactionPage() {
         <div className="relative">
           <label
             htmlFor="account"
-            className="block text-sm font-medium text-gray-700 mb-1"
+            className="block text-sm font-semibold text-slate-700 mb-2"
           >
             บัญชี
           </label>
@@ -641,7 +641,7 @@ function NewTransactionPage() {
               value={selectedAccount}
               onChange={(e) => setSelectedAccount(e.target.value)}
               required
-              className="w-full pl-10 pr-4 py-3 border border-gray-300 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
+              className="w-full pl-10 pr-4 py-3 border border-slate-300 text-slate-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-200 focus:border-slate-500 appearance-none shadow-sm"
             >
               <option value="" disabled>
                 เลือกบัญชี
@@ -703,10 +703,10 @@ function NewTransactionPage() {
   const getTabClass = (tabName: TransactionType) => {
     const palette = tabPalette[tabName];
     const isActive = activeTab === tabName;
-    return `flex-1 rounded-full px-4 py-3 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${
+    return `flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${
       isActive
-        ? `bg-gradient-to-r ${palette.gradient} text-white shadow-lg ${palette.shadow}`
-        : palette.inactive
+        ? `bg-gradient-to-r ${palette.gradient} text-white shadow-md ${palette.shadow}`
+        : 'text-slate-600 hover:bg-white hover:text-slate-800 hover:shadow-sm'
     }`;
   };
 
@@ -783,40 +783,38 @@ function NewTransactionPage() {
 
   return (
     <AuthGuard>
-      <div className="relative min-h-screen overflow-hidden bg-slate-950 font-inter text-slate-100">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.25),transparent_60%),radial-gradient(circle_at_bottom,_rgba(16,185,129,0.18),transparent_55%)]" />
-
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 font-inter">
         {showToast && (
           <div className="fixed top-6 left-1/2 z-50 w-full max-w-sm -translate-x-1/2">
             <div className="flex items-start gap-3 rounded-2xl bg-emerald-500/95 px-4 py-4 shadow-2xl shadow-emerald-500/40 backdrop-blur">
               <CheckCircleIcon />
               <div>
-                <p className="font-semibold leading-tight">บันทึกรายการสำเร็จ!</p>
+                <p className="font-semibold leading-tight text-white">บันทึกรายการสำเร็จ!</p>
                 <p className="mt-1 text-sm text-emerald-50/90">ยอดเงินอัปเดตแล้ว ระบบกำลังรีเฟรชข้อมูล...</p>
               </div>
             </div>
           </div>
         )}
 
-        <header className="relative z-10 px-4 pt-8">
+        <header className="relative z-10 px-4 pt-8 pb-6">
           <div className="mx-auto flex max-w-2xl items-center gap-3">
             <button
               onClick={() => router.push('/transactions')}
-              className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-2 text-sm font-medium text-sky-200 transition hover:bg-white/20"
+              className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:bg-slate-50 hover:border-slate-400"
             >
               <ArrowLeftIcon />
               กลับไปหน้ารายการ
             </button>
             <div className="flex-1 text-center">
-              <h1 className="text-2xl font-semibold text-white">บันทึกรายการใหม่</h1>
-              <p className="mt-2 text-sm text-slate-300">
+              <h1 className="text-2xl font-bold text-slate-800">บันทึกรายการใหม่</h1>
+              <p className="mt-2 text-sm text-slate-600">
                 จัดสรรเงินเข้า-ออกได้อย่างมั่นใจด้วยแบบฟอร์มที่ออกแบบมาเพื่อคุณ
               </p>
             </div>
           </div>
         </header>
 
-        <main className="relative z-10 mx-auto mt-6 max-w-2xl px-4 pb-14">
+        <main className="relative z-10 mx-auto max-w-2xl px-4 pb-14">
           {error && (
             <div className="mb-5">
               <AlertBanner
@@ -836,42 +834,29 @@ function NewTransactionPage() {
             </div>
           )}
 
-          <section className="space-y-6 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur">
-            <div className={`flex items-start gap-4 rounded-2xl border ${palette.ring} ${palette.subtle} px-4 py-4`}>
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/15">
+          <div className="bg-white rounded-2xl shadow-lg border border-slate-200">
+            <div className={`flex items-start gap-4 rounded-t-2xl border-b border-slate-200 px-6 py-5 ${palette.subtle}`}>
+              <div className={`flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-r ${palette.gradient} shadow-lg`}>
                 {heroIcons[activeTab]}
               </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-widest text-white/70">
+              <div className="flex-1">
+                <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
                   {activeCopy.label}
                 </p>
-                <h2 className="mt-1 text-lg font-semibold text-white">{activeCopy.blurb}</h2>
-                <p className="mt-2 text-sm text-slate-200/85">{activeCopy.helper}</p>
+                <h2 className="mt-1 text-lg font-semibold text-slate-800">{activeCopy.blurb}</h2>
+                <p className="mt-2 text-sm text-slate-600">{activeCopy.helper}</p>
               </div>
             </div>
 
             {loading && (
-              <div className="flex items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/10 px-4 py-5 text-slate-200">
-                <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+              <div className="flex items-center justify-center gap-3 border-b border-slate-200 px-6 py-5 text-slate-600">
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" />
                 <span>กำลังโหลดข้อมูลประกอบ...</span>
               </div>
             )}
 
-            <div className="rounded-3xl bg-white text-slate-900 shadow-xl ring-1 ring-slate-100">
-              <div className="border-b border-slate-100 px-6 py-5">
-                <div className="flex items-center justify-between">
-                  <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${palette.badge}`}>
-                    {activeCopy.label}
-                  </span>
-                  <span className="text-xs text-slate-400">
-                    วันที่ {new Date(date).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' })}
-                  </span>
-                </div>
-                <p className="mt-3 text-sm text-slate-500">{activeCopy.helper}</p>
-              </div>
-
-              <div className="px-6 pb-6 pt-5">
-                <div className="flex gap-2 rounded-full bg-slate-100/70 p-1">
+              <div className="px-6 py-6">
+                <div className="flex gap-2 rounded-xl bg-slate-100 p-1.5">
                   <button type="button" className={getTabClass('expense')} onClick={() => setActiveTab('expense')}>
                     รายจ่าย
                   </button>
@@ -885,7 +870,7 @@ function NewTransactionPage() {
 
                 <form onSubmit={handleSubmit} className="mt-6 space-y-6">
                   <div>
-                    <label htmlFor="amount" className="block text-sm font-semibold text-slate-700">
+                    <label htmlFor="amount" className="block text-sm font-semibold text-slate-700 mb-2">
                       จำนวนเงิน
                     </label>
                     <input
@@ -896,33 +881,33 @@ function NewTransactionPage() {
                       required
                       placeholder="0.00"
                       step="0.01"
-                      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 shadow-sm transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+                      className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base text-slate-900 shadow-sm transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
                     />
                   </div>
 
                   {renderFormContent()}
 
                   <div>
-                    <label htmlFor="date" className="block text-sm font-semibold text-slate-700">
+                    <label htmlFor="date" className="block text-sm font-semibold text-slate-700 mb-2">
                       วันที่
                     </label>
-                    <div className="relative mt-2">
+                    <div className="relative">
                       <input
                         type="date"
                         id="date"
                         value={date}
                         onChange={(e) => setDate(e.target.value)}
                         required
-                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 shadow-sm transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+                        className="w-full rounded-xl border border-slate-300 bg-white pl-10 pr-4 py-3 text-slate-900 shadow-sm transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
                       />
-                      <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400">
+                      <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
                         <CalendarIcon />
                       </div>
                     </div>
                   </div>
 
                   <div>
-                    <label htmlFor="description" className="block text-sm font-semibold text-slate-700">
+                    <label htmlFor="description" className="block text-sm font-semibold text-slate-700 mb-2">
                       รายละเอียด (ไม่บังคับ)
                     </label>
                     <input
@@ -931,21 +916,20 @@ function NewTransactionPage() {
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
                       placeholder="เช่น กาแฟยามเช้า หรือ โบนัสปลายปี"
-                      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 shadow-sm transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+                      className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 shadow-sm transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
                     />
                   </div>
 
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className={`w-full rounded-2xl bg-gradient-to-r ${palette.gradient} py-3 text-base font-semibold text-white shadow-lg transition hover:brightness-105 focus:outline-none focus:ring-2 focus:ring-white/40 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-70 ${palette.shadow}`}
+                    className={`w-full rounded-xl bg-gradient-to-r ${palette.gradient} py-3.5 text-base font-semibold text-white shadow-lg transition hover:brightness-105 focus:outline-none focus:ring-2 focus:ring-slate-400/50 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70 ${palette.shadow}`}
                   >
                     {isSubmitting ? 'กำลังบันทึก...' : 'บันทึกรายการ'}
                   </button>
                 </form>
               </div>
             </div>
-          </section>
         </main>
       </div>
     </AuthGuard>

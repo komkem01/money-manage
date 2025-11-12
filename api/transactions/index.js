@@ -1,6 +1,43 @@
 const jwt = require('jsonwebtoken');
 const { getClient } = require('../_db');
 
+const normalizeTransactionDate = (input, { fallbackToNow = true } = {}) => {
+  if (input === undefined) {
+    return fallbackToNow ? Date.now() : undefined;
+  }
+
+  if (input === null) {
+    return fallbackToNow ? Date.now() : null;
+  }
+
+  if (typeof input === 'number') {
+    return Number.isFinite(input) ? input : NaN;
+  }
+
+  if (typeof input === 'string') {
+    const trimmed = input.trim();
+
+    if (trimmed.length === 0) {
+      return fallbackToNow ? Date.now() : null;
+    }
+
+    if (/^\d+$/.test(trimmed)) {
+      const parsed = Number(trimmed);
+      return Number.isFinite(parsed) ? parsed : NaN;
+    }
+
+    const parsed = Date.parse(trimmed);
+    return Number.isNaN(parsed) ? NaN : parsed;
+  }
+
+  if (input instanceof Date) {
+    const time = input.getTime();
+    return Number.isNaN(time) ? NaN : time;
+  }
+
+  return NaN;
+};
+
 const authenticate = (handler) => async (req, res) => {
   const client = await getClient();
   
@@ -122,6 +159,7 @@ const handler = async (req, res) => {
       if (req.method === 'POST') {
         const { amount, description, date, transaction_date, account_id, category_id, related_account_id } = req.body;
         const transactionDate = date || transaction_date;
+        const normalizedTransactionDate = transactionDate !== undefined ? normalizeTransactionDate(transactionDate) : undefined;
 
         console.log('Creating transaction - debug info:', {
           amount, 
@@ -136,8 +174,8 @@ const handler = async (req, res) => {
           dateType: typeof transactionDate,
           parsedAmount: parseFloat(amount),
           dateString: transactionDate,
-          datePattern: transactionDate ? /^\d{4}-\d{2}-\d{2}$/.test(transactionDate) : 'no date',
-          isDateValid: transactionDate ? !isNaN(new Date(transactionDate).getTime()) : 'no date to validate'
+          normalizedTransactionDate,
+          isDateValid: normalizedTransactionDate === undefined ? 'no date to validate' : !Number.isNaN(normalizedTransactionDate)
         });
 
         // Validation
@@ -169,28 +207,14 @@ const handler = async (req, res) => {
           });
         }
 
-        // Validate date if provided (should be YYYY-MM-DD format)
-        if (transactionDate) {
-          // ตรวจสอบรูปแบบวันที่ (YYYY-MM-DD)
-          const datePattern = /^\d{4}-\d{2}-\d{2}$/;
-          if (!datePattern.test(transactionDate)) {
-            return res.status(400).json({
-              success: false,
-              error: 'VALIDATION_ERROR',
-              message: '❌ รูปแบบวันที่ไม่ถูกต้อง (ต้องเป็น YYYY-MM-DD)',
-              field: 'date'
-            });
-          }
-          
-          const dateValue = new Date(transactionDate);
-          if (isNaN(dateValue.getTime())) {
-            return res.status(400).json({
-              success: false,
-              error: 'VALIDATION_ERROR',
-              message: '❌ วันที่ไม่ถูกต้อง',
-              field: 'date'
-            });
-          }
+        // Validate date if provided
+        if (transactionDate !== undefined && Number.isNaN(normalizedTransactionDate)) {
+          return res.status(400).json({
+            success: false,
+            error: 'VALIDATION_ERROR',
+            message: '❌ วันที่ไม่ถูกต้อง',
+            field: 'date'
+          });
         }
 
         await client.query('BEGIN');
@@ -292,16 +316,10 @@ const handler = async (req, res) => {
           // สร้างธุรกรรม
           const transactionAmount = Math.abs(parseFloat(amount));
           const now = Date.now().toString();
-          
-          // Validate and convert transaction date to Unix timestamp
-          let txDate = now;
-          if (transactionDate) {
-            console.log('Converting date from frontend:', transactionDate);
-            
-            // รับวันที่เป็น string (YYYY-MM-DD) และแปลงเป็น Unix timestamp
-            const dateValue = new Date(transactionDate);
-            if (isNaN(dateValue.getTime())) {
-              console.error('Invalid transaction date:', transactionDate, 'parsed as:', dateValue);
+
+          let txDate = Number(now);
+          if (transactionDate !== undefined) {
+            if (Number.isNaN(normalizedTransactionDate)) {
               await client.query('ROLLBACK');
               return res.status(400).json({ 
                 success: false,
@@ -310,11 +328,11 @@ const handler = async (req, res) => {
                 field: 'date' 
               });
             }
-            
-            // แปลงเป็น Unix timestamp (milliseconds)
-            txDate = dateValue.getTime().toString();
-            console.log('Date converted to Unix timestamp:', txDate);
+
+            txDate = normalizedTransactionDate;
           }
+
+          txDate = txDate.toString();
 
           const newTransactionResult = await client.query(
             `INSERT INTO transactions (amount, description, date, user_id, type_id, account_id, category_id, related_account_id, created_at, updated_at)
