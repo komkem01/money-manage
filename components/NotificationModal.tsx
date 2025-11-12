@@ -49,6 +49,17 @@ export interface NotificationModalProps {
   onCancel?: () => void;
 }
 
+type ThemeColors = {
+  bgColor: string;
+  borderColor: string;
+  titleColor: string;
+  messageColor: string;
+  confirmBg: string;
+  confirmText: string;
+  overlayColor: string;
+  overlayGradient: string;
+};
+
 const NotificationModal: React.FC<NotificationModalProps> = ({
   isOpen,
   onClose,
@@ -117,7 +128,7 @@ const NotificationModal: React.FC<NotificationModalProps> = ({
     }
   };
 
-  const getThemeColors = () => {
+  const getThemeColors = (): ThemeColors => {
     switch (type) {
       case 'success':
         return {
@@ -127,6 +138,8 @@ const NotificationModal: React.FC<NotificationModalProps> = ({
           messageColor: 'text-green-700',
           confirmBg: 'bg-green-600 hover:bg-green-700',
           confirmText: 'text-white',
+          overlayColor: 'bg-white/70',
+          overlayGradient: 'linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(255, 255, 255, 0.85))',
         };
       case 'error':
         return {
@@ -136,6 +149,8 @@ const NotificationModal: React.FC<NotificationModalProps> = ({
           messageColor: 'text-red-700',
           confirmBg: 'bg-red-600 hover:bg-red-700',
           confirmText: 'text-white',
+          overlayColor: 'bg-white/70',
+          overlayGradient: 'linear-gradient(135deg, rgba(244, 63, 94, 0.14), rgba(255, 255, 255, 0.85))',
         };
       case 'warning':
         return {
@@ -145,6 +160,8 @@ const NotificationModal: React.FC<NotificationModalProps> = ({
           messageColor: 'text-yellow-700',
           confirmBg: 'bg-yellow-600 hover:bg-yellow-700',
           confirmText: 'text-white',
+          overlayColor: 'bg-white/70',
+          overlayGradient: 'linear-gradient(135deg, rgba(245, 158, 11, 0.14), rgba(255, 255, 255, 0.85))',
         };
       case 'info':
         return {
@@ -154,6 +171,8 @@ const NotificationModal: React.FC<NotificationModalProps> = ({
           messageColor: 'text-blue-700',
           confirmBg: 'bg-blue-600 hover:bg-blue-700',
           confirmText: 'text-white',
+          overlayColor: 'bg-white/70',
+          overlayGradient: 'linear-gradient(135deg, rgba(59, 130, 246, 0.14), rgba(255, 255, 255, 0.85))',
         };
       default:
         return {
@@ -163,6 +182,8 @@ const NotificationModal: React.FC<NotificationModalProps> = ({
           messageColor: 'text-gray-700',
           confirmBg: 'bg-gray-600 hover:bg-gray-700',
           confirmText: 'text-white',
+          overlayColor: 'bg-white/70',
+          overlayGradient: 'linear-gradient(135deg, rgba(107, 114, 128, 0.12), rgba(255, 255, 255, 0.85))',
         };
     }
   };
@@ -189,7 +210,8 @@ const NotificationModal: React.FC<NotificationModalProps> = ({
     <div className="fixed inset-0 z-50 overflow-y-auto">
       {/* Backdrop */}
       <div 
-        className="fixed inset-0 bg-black bg-opacity-50 transition-opacity duration-300"
+        className={`fixed inset-0 transition-opacity duration-300 backdrop-blur-sm ${colors.overlayColor}`}
+        style={{ background: colors.overlayGradient }}
         onClick={onClose}
       />
       
