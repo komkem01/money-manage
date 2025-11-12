@@ -97,6 +97,36 @@ export interface TransactionFormData {
   amount: number;
 }
 
+export interface PendingExpense {
+  id: string;
+  user_id: string;
+  category_id: string;
+  title: string;
+  description?: string;
+  amount: string; // numeric in database, string for precision
+  due_date?: string; // ISO date string
+  priority: 'low' | 'medium' | 'high';
+  status: 'pending' | 'paid' | 'overdue';
+  is_recurring: boolean;
+  recurring_type?: 'daily' | 'weekly' | 'monthly' | 'yearly';
+  created_at?: string; // Unix timestamp in milliseconds as string
+  updated_at?: string; // Unix timestamp in milliseconds as string
+  // Relations
+  category?: Category;
+}
+
+export interface PendingExpenseFormData {
+  id?: string | null;
+  category_id: string;
+  title: string;
+  description?: string;
+  amount: number;
+  due_date?: string;
+  priority: 'low' | 'medium' | 'high';
+  is_recurring: boolean;
+  recurring_type?: 'daily' | 'weekly' | 'monthly' | 'yearly';
+}
+
 // Legacy type for backward compatibility
 export interface TypeResponse {
   success: boolean;

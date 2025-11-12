@@ -641,8 +641,8 @@ function DashboardPage() {
         {/* --- 2. เมนูลัด (Quick Actions) --- */}
         <section className="bg-white p-6 rounded-lg shadow-lg mb-8">
           <h2 className="text-xl font-semibold text-gray-800 mb-5">เมนูลัด</h2>
-          {/* (แก้ไข) ปรับ grid layout ให้รองรับ 4 ปุ่ม */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* (แก้ไข) ปรับ grid layout ให้รองรับ 5 ปุ่ม */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             {/* ปุ่ม: บันทึกรายรับ/รายจ่าย */}
             <button
               onClick={() => router.push("/transactions")}
@@ -668,6 +668,24 @@ function DashboardPage() {
             >
               <CogIcon />
               <span>จัดการหมวดหมู่ (ประเภท)</span>
+            </button>
+
+            {/* ปุ่ม: รายจ่ายที่รอจ่าย */}
+            <button
+              onClick={() => router.push("/pending-expenses")}
+              className="flex items-center justify-center p-4 bg-orange-500 text-white font-medium rounded-lg shadow-md hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-opacity-50 transition duration-300"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-6 w-6 mr-2"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>รายจ่ายที่รอจ่าย</span>
             </button>
 
             {/* ปุ่ม: ดูประวัติทั้งหมด */}
