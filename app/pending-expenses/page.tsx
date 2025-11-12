@@ -136,7 +136,8 @@ function PendingExpensesPage() {
   const [showToast, setShowToast] = useState<string>("");
   const [deleteExpenseId, setDeleteExpenseId] = useState<string | null>(null);
   const [convertExpenseId, setConvertExpenseId] = useState<string | null>(null);
-  const [selectedAccountId, setSelectedAccountId] = useState<string>("");
+  const [markAsPaidExpenseId, setMarkAsPaidExpenseId] = useState<string | null>(null);
+  const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>("");
   const [actionLoading, setActionLoading] = useState<boolean>(false);
@@ -225,6 +226,14 @@ function PendingExpensesPage() {
   };
 
   /**
+   * เปิด Modal สำหรับมาร์คเป็นจ่ายแล้ว
+   */
+  const handleOpenMarkAsPaidModal = (expense: PendingExpense) => {
+    setMarkAsPaidExpenseId(expense.id);
+    setSelectedAccountId(accounts.length > 0 ? accounts[0].id : "");
+  };
+
+  /**
    * ดำเนินการลบจริง
    */
   const handleDeleteExpense = async () => {
@@ -292,30 +301,45 @@ function PendingExpensesPage() {
   };
 
   /**
-   * มาร์คเป็น paid (ไม่สร้างธุรกรรม)
+   * มาร์คเป็น paid และสร้างธุรกรรม
    */
-  const handleMarkAsPaid = async (id: string) => {
+  const handleMarkAsPaid = async () => {
+    if (!markAsPaidExpenseId || !selectedAccountId) return;
+
     setActionLoading(true);
     try {
-      const response = await markAsPaid(id);
+      // ใช้ convertToTransaction แทนการ markAsPaid เฉยๆ
+      const response = await convertToTransaction(markAsPaidExpenseId, selectedAccountId);
       
       if (response.success) {
+        // อัปเดต status เป็น paid
         setPendingExpenses(prev => 
           prev.map(exp => 
-            exp.id === id 
+            exp.id === markAsPaidExpenseId 
               ? { ...exp, status: 'paid' as const }
               : exp
           )
         );
-        showToastMessage("มาร์คเป็นจ่ายแล้วสำเร็จ!");
+        
+        // แสดงข้อความสำเร็จพร้อมรายละเอียด
+        if (response.data?.summary) {
+          const { summary } = response.data;
+          showToastMessage(
+            `จ่ายแล้วและบันทึกธุรกรรมสำเร็จ! จ่าย ${summary.expenseAmount.toLocaleString('th-TH')} บาท จากบัญชี ${summary.accountName} (คงเหลือ ${summary.newBalance.toLocaleString('th-TH')} บาท)`
+          );
+        } else {
+          showToastMessage("จ่ายแล้วและบันทึกธุรกรรมสำเร็จ!");
+        }
       } else {
-        setError(response.message || 'ไม่สามารถมาร์คเป็นจ่ายแล้วได้');
+        setError(response.message || 'ไม่สามารถจ่ายและบันทึกธุรกรรมได้');
       }
     } catch (error: any) {
       console.error('Mark as paid error:', error);
-      setError(error.message || 'เกิดข้อผิดพลาดในการมาร์คเป็นจ่ายแล้ว');
+      setError(error.message || 'เกิดข้อผิดพลาดในการจ่ายและบันทึกธุรกรรม');
     } finally {
       setActionLoading(false);
+      setMarkAsPaidExpenseId(null);
+      setSelectedAccountId("");
     }
   };
 
@@ -531,9 +555,9 @@ function PendingExpensesPage() {
                             <CreditCardIcon />
                           </button>
                           <button
-                            onClick={() => handleMarkAsPaid(expense.id)}
+                            onClick={() => handleOpenMarkAsPaidModal(expense)}
                             className="p-2 rounded-md text-blue-600 bg-blue-100 hover:bg-blue-200"
-                            title="มาร์คเป็นจ่ายแล้ว"
+                            title="จ่ายแล้ว"
                           >
                             <CheckIcon />
                           </button>
@@ -594,6 +618,100 @@ function PendingExpensesPage() {
         loading={actionLoading}
         onCancel={() => setDeleteExpenseId(null)}
         onConfirm={handleDeleteExpense}
+      />
+
+      {/* --- Modal ยืนยันการจ่ายแล้ว --- */}
+      <ConfirmModal
+        open={!!markAsPaidExpenseId}
+        tone="success"
+        title="จ่ายแล้ว"
+        message={
+          <div className="space-y-4">
+            <p>คุณต้องการจ่าย "{pendingExpenses.find(exp => exp.id === markAsPaidExpenseId)?.title}" หรือไม่?</p>
+            
+            <div className="bg-green-50 p-3 rounded-lg">
+              <h4 className="font-medium text-green-800 mb-2">รายละเอียดรายจ่าย:</h4>
+              <p className="text-sm text-green-700">
+                จำนวน: <span className="font-semibold">{parseFloat(pendingExpenses.find(exp => exp.id === markAsPaidExpenseId)?.amount || '0').toLocaleString("th-TH")} ฿</span>
+              </p>
+              <p className="text-sm text-green-700">
+                หมวดหมู่: {pendingExpenses.find(exp => exp.id === markAsPaidExpenseId)?.category?.name}
+              </p>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                เลือกบัญชีที่จ่าย:
+              </label>
+              <select
+                value={selectedAccountId}
+                onChange={(e) => setSelectedAccountId(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              >
+                {accounts.map(account => {
+                  const balance = parseFloat(account.balance || account.amount);
+                  const expenseAmount = parseFloat(pendingExpenses.find(exp => exp.id === markAsPaidExpenseId)?.amount || '0');
+                  const insufficient = balance < expenseAmount;
+                  
+                  return (
+                    <option key={account.id} value={account.id} disabled={insufficient}>
+                      {account.name} ({balance.toLocaleString("th-TH")} ฿) 
+                      {insufficient ? ' - ยอดเงินไม่เพียงพอ' : ''}
+                    </option>
+                  );
+                })}
+              </select>
+              
+              {(() => {
+                const selectedAccount = accounts.find(acc => acc.id === selectedAccountId);
+                const currentExpense = pendingExpenses.find(exp => exp.id === markAsPaidExpenseId);
+                if (selectedAccount && currentExpense) {
+                  const balance = parseFloat(selectedAccount.balance || selectedAccount.amount);
+                  const expenseAmount = parseFloat(currentExpense.amount);
+                  const remaining = balance - expenseAmount;
+                  
+                  return (
+                    <div className={`mt-2 p-2 rounded text-sm ${remaining >= 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                      <p>ยอดคงเหลือหลังจ่าย: <span className="font-semibold">{remaining.toLocaleString("th-TH")} ฿</span></p>
+                      {remaining < 0 && <p className="text-xs mt-1">⚠️ ยอดเงินไม่เพียงพอสำหรับการทำธุรกรรมนี้</p>}
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+            </div>
+          </div>
+        }
+        confirmLabel={actionLoading ? 'กำลังจ่าย...' : 'ยืนยันการจ่าย'}
+        cancelLabel="ยกเลิก"
+        loading={actionLoading}
+        disabled={(() => {
+          const selectedAccount = accounts.find(acc => acc.id === selectedAccountId);
+          const currentExpense = pendingExpenses.find(exp => exp.id === markAsPaidExpenseId);
+          if (selectedAccount && currentExpense) {
+            const balance = parseFloat(selectedAccount.balance || selectedAccount.amount);
+            const expenseAmount = parseFloat(currentExpense.amount);
+            return balance < expenseAmount;
+          }
+          return false;
+        })()}
+        errorMessage={(() => {
+          const selectedAccount = accounts.find(acc => acc.id === selectedAccountId);
+          const currentExpense = pendingExpenses.find(exp => exp.id === markAsPaidExpenseId);
+          if (selectedAccount && currentExpense) {
+            const balance = parseFloat(selectedAccount.balance || selectedAccount.amount);
+            const expenseAmount = parseFloat(currentExpense.amount);
+            if (balance < expenseAmount) {
+              return `ยอดเงินในบัญชี "${selectedAccount.name}" ไม่เพียงพอ (ขาดอีก ${(expenseAmount - balance).toLocaleString("th-TH")} ฿)`;
+            }
+          }
+          return undefined;
+        })()}
+        onCancel={() => {
+          setMarkAsPaidExpenseId(null);
+          setSelectedAccountId("");
+        }}
+        onConfirm={handleMarkAsPaid}
       />
 
       {/* --- Modal ยืนยันการแปลงเป็นธุรกรรม --- */}
