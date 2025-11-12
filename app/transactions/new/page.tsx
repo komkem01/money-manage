@@ -8,24 +8,9 @@ import { getAuthToken } from '@/lib/auth';
 import { Account, Category } from '@/lib/types';
 import AuthGuard from '@/components/AuthGuard';
 import AlertBanner from '@/components/ui/AlertBanner';
+import BackButton from '@/components/ui/BackButton';
 
 // --- ไอคอน SVG ---
-const ArrowLeftIcon = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    className="h-5 w-5 mr-1"
-    fill="none"
-    viewBox="0 0 24 24"
-    stroke="currentColor"
-    strokeWidth={2}
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M10 19l-7-7m0 0l7-7m-7 7h18"
-    />
-  </svg>
-);
 const CheckCircleIcon = () => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
@@ -798,13 +783,10 @@ function NewTransactionPage() {
 
         <header className="relative z-10 px-4 pt-8 pb-6">
           <div className="mx-auto flex max-w-2xl items-center gap-3">
-            <button
-              onClick={() => router.push('/transactions')}
-              className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:bg-slate-50 hover:border-slate-400"
-            >
-              <ArrowLeftIcon />
-              กลับไปหน้ารายการ
-            </button>
+            <BackButton 
+              href="/transactions"
+              label="กลับไปหน้ารายการ"
+            />
             <div className="flex-1 text-center">
               <h1 className="text-2xl font-bold text-slate-800">บันทึกรายการใหม่</h1>
               <p className="mt-2 text-sm text-slate-600">

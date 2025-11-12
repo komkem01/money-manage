@@ -1,30 +1,18 @@
 "use client";
-import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { getCategoriesByType, createCategory, updateCategory, deleteCategory } from '@/lib/categories';
+"use client";
+import React, { useState, useEffect, useCallback } from "react";
+import { useRouter, useSearchParams } from 'next/navigation';
+import { getAllCategories, createCategory, updateCategory, deleteCategory, getCategoriesByType } from '@/lib/categories';
 import { getAllTypes } from '@/lib/types';
 import { getAuthToken } from '@/lib/auth';
+import { Category as LibCategory } from '@/lib/types';
+import AuthGuard from '@/components/AuthGuard';
 import AlertBanner from '@/components/ui/AlertBanner';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import FormModal from '@/components/ui/FormModal';
+import BackButton from '@/components/ui/BackButton';
 
 // --- ไอคอน SVG (คัดลอกมา) ---
-const ArrowLeftIcon = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    className="h-5 w-5 mr-1"
-    fill="none"
-    viewBox="0 0 24 24"
-    stroke="currentColor"
-    strokeWidth={2}
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M10 19l-7-7m0 0l7-7m-7 7h18"
-    />
-  </svg>
-);
 const PlusIcon = () => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
@@ -323,13 +311,10 @@ const IncomeCategoriesPage: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-800">
             จัดการหมวดหมู่รายรับ
           </h1>
-          <button
-            onClick={() => router.push("/type")}
-            className="flex items-center px-3 py-2 text-sm font-medium rounded-md text-blue-600 bg-blue-100 hover:bg-blue-200"
-          >
-            <ArrowLeftIcon />
-            กลับหน้าประเภท
-          </button>
+          <BackButton 
+            href="/type"
+            label="กลับหน้าประเภท"
+          />
         </div>
       </header>
 
