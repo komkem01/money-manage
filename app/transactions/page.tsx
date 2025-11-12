@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from 'next/navigation';
 import { getAllTransactions, deleteTransaction, updateTransaction } from '@/lib/transactions';
 import { getAllAccounts } from '@/lib/accounts';
@@ -7,6 +7,9 @@ import { getAllCategories } from '@/lib/categories';
 import { getAuthToken } from '@/lib/auth';
 import { Transaction, Account, Category } from '@/lib/types';
 import AuthGuard from '@/components/AuthGuard';
+import AlertBanner from '@/components/ui/AlertBanner';
+import ConfirmModal from '@/components/ui/ConfirmModal';
+import FormModal from '@/components/ui/FormModal';
 
 // --- ไอคอน SVG ---
 const ArrowLeftIcon = () => (
@@ -109,10 +112,10 @@ const CheckCircleIcon = () => (
     />
   </svg>
 );
-const ExclamationIcon = () => (
+const LedgerIcon = () => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
-    className="h-12 w-12 text-red-500"
+    className="h-7 w-7 text-white"
     fill="none"
     viewBox="0 0 24 24"
     stroke="currentColor"
@@ -121,11 +124,11 @@ const ExclamationIcon = () => (
     <path
       strokeLinecap="round"
       strokeLinejoin="round"
-      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+      d="M5 6a2 2 0 012-2h9a2 2 0 012 2v14l-4-2-4 2-4-2-1 .5V6z"
     />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9 10h6M9 14h3" />
   </svg>
 );
-
 // --- ประเภทข้อมูล (Interfaces) ---
 type TransactionType = "expense" | "income" | "transfer";
 
@@ -196,7 +199,7 @@ function TransactionListPage() {
   };
 
   // โหลดข้อมูลธุรกรรม
-  const loadTransactions = async (page: number = 1) => {
+  const loadTransactions = useCallback(async (page: number = 1) => {
     try {
       setLoading(true);
       setError('');
@@ -230,10 +233,10 @@ function TransactionListPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [router]);
 
   // โหลดข้อมูลบัญชีและหมวดหมู่
-  const loadReferenceData = async () => {
+  const loadReferenceData = useCallback(async () => {
     try {
       const [accountsResponse, categoriesResponse] = await Promise.all([
         getAllAccounts(),
@@ -250,17 +253,17 @@ function TransactionListPage() {
     } catch (error: any) {
       console.error('Load reference data error:', error);
     }
-  };
+  }, []);
 
   // โหลดข้อมูลเมื่อ component mount หรือเมื่อ page เปลี่ยน
   useEffect(() => {
     loadTransactions(currentPage);
-  }, [currentPage, router]);
+  }, [currentPage, loadTransactions]);
 
   // โหลดข้อมูลอ้างอิงเมื่อ component mount
   useEffect(() => {
     loadReferenceData();
-  }, []);
+  }, [loadReferenceData]);
 
   const goToNextPage = () => {
     if (currentPage < totalPages) {
@@ -344,24 +347,24 @@ function TransactionListPage() {
   ) => {
     if (!showEditModal) return;
     const { id, value } = e.target;
-    
+
     if (id === "amount") {
       setShowEditModal(prev => prev ? { ...prev, [id]: parseFloat(value) || 0 } : null);
     } else if (id === "category") {
       // อัปเดต categoryId เมื่อเปลี่ยนหมวดหมู่
-      const selectedCategory = categories.find(cat => cat.name === value);
-      setShowEditModal(prev => prev ? { 
+      const selectedCategory = categories.find(cat => cat.id === value);
+      setShowEditModal(prev => prev ? {
         ...prev, 
-        category: value,
-        categoryId: selectedCategory?.id || prev.categoryId
+        category: selectedCategory?.name || prev.category,
+        categoryId: selectedCategory?.id || value
       } : null);
     } else if (id === "account") {
       // อัปเดต accountId เมื่อเปลี่ยนบัญชี
-      const selectedAccount = accounts.find(acc => acc.name === value);
-      setShowEditModal(prev => prev ? { 
+      const selectedAccount = accounts.find(acc => acc.id === value);
+      setShowEditModal(prev => prev ? {
         ...prev, 
-        account: value,
-        accountId: selectedAccount?.id || prev.accountId
+        account: selectedAccount?.name || prev.account,
+        accountId: selectedAccount?.id || value
       } : null);
     } else {
       setShowEditModal(prev => prev ? { ...prev, [id]: value } : null);
@@ -381,6 +384,10 @@ function TransactionListPage() {
   };
 
   // ลบ mockNavigate
+
+  const transactionPendingDelete = showDeleteConfirm
+    ? transactions.find((t) => t.id === showDeleteConfirm)
+    : null;
 
   return (
     <AuthGuard>
@@ -410,25 +417,21 @@ function TransactionListPage() {
 
       {/* --- Main Content --- */}
       <main className="max-w-4xl mx-auto p-4 md:p-6">
+        {error && (
+          <AlertBanner
+            tone="error"
+            title="เกิดข้อผิดพลาด"
+            message={error}
+            onDismiss={() => setError('')}
+          />
+        )}
+
         <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg min-h-[400px] flex flex-col">
           {/* --- Loading State --- */}
           {loading && (
             <div className="flex justify-center items-center py-20">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
               <span className="ml-2 text-gray-600">กำลังโหลดข้อมูล...</span>
-            </div>
-          )}
-
-          {/* --- Error State --- */}
-          {error && (
-            <div className="p-4 bg-red-50 border-l-4 border-red-400">
-              <p className="text-red-700">{error}</p>
-              <button
-                onClick={() => loadTransactions(currentPage)}
-                className="mt-2 px-4 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700"
-              >
-                ลองใหม่
-              </button>
             </div>
           )}
 
@@ -543,187 +546,149 @@ function TransactionListPage() {
       )}
 
       {/* --- Modal (Confirm Delete) --- */}
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white bg-opacity-75 backdrop-blur-sm transition-opacity">
-          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm mx-4 transition-transform scale-100">
-            <div className="flex flex-col items-center text-center">
-              <ExclamationIcon />
-              <h3 className="text-xl font-bold text-gray-800 mt-4">
-                ยืนยันการลบ
-              </h3>
-              <p className="text-gray-600 mt-2">
-                คุณแน่ใจหรือไม่ว่าต้องการลบรายการนี้?
-                การกระทำนี้ไม่สามารถยกเลิกได้
-              </p>
+      <ConfirmModal
+        open={!!showDeleteConfirm}
+        tone="danger"
+        title="ยืนยันการลบ"
+        message={(
+          <span>
+            คุณแน่ใจหรือไม่ว่าต้องการลบรายการนี้?<br />การกระทำนี้ไม่สามารถยกเลิกได้
+          </span>
+        )}
+        highlight={transactionPendingDelete?.category}
+        confirmLabel={isDeleting ? 'กำลังลบ...' : 'ยืนยันการลบ'}
+        cancelLabel="ยกเลิก"
+        loading={isDeleting}
+        onCancel={() => setShowDeleteConfirm(null)}
+        onConfirm={() => showDeleteConfirm && handleDelete(showDeleteConfirm)}
+      />
+
+      {showEditModal && (
+        <FormModal
+          open
+          onClose={() => setShowEditModal(null)}
+          title="แก้ไขรายการธุรกรรม"
+          description="ปรับรายละเอียดรายการ เพื่อให้ประวัติการเงินของคุณถูกต้องอยู่เสมอ"
+          tone="primary"
+          icon={<LedgerIcon />}
+          maxWidth="lg"
+        >
+          <form onSubmit={handleEditSubmit} className="space-y-5">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                ประเภท
+              </label>
+              <input
+                type="text"
+                disabled
+                value={showEditModal.type === "expense" ? "รายจ่าย" : showEditModal.type === "income" ? "รายรับ" : "โยกย้าย"}
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-gray-600"
+              />
             </div>
-            <div className="flex justify-center gap-4 mt-6">
+
+            <div>
+              <label
+                htmlFor="category"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                หมวดหมู่
+              </label>
+              <select
+                id="category"
+                value={showEditModal.categoryId}
+                onChange={handleEditChange}
+                required
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-gray-900 transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              >
+                {categories
+                  .filter(cat => cat.type?.name === (
+                    showEditModal.type === "expense" ? "Expense" :
+                    showEditModal.type === "income" ? "Income" : "Transfer"
+                  ))
+                  .map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="account"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                บัญชี
+              </label>
+              <select
+                id="account"
+                value={showEditModal.accountId}
+                onChange={handleEditChange}
+                required
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-gray-900 transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              >
+                {accounts.map((acc) => (
+                  <option key={acc.id} value={acc.id}>
+                    {acc.name} (คงเหลือ: {parseFloat(acc.balance || acc.amount || '0').toLocaleString()} บาท)
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="amount"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                จำนวนเงิน
+              </label>
+              <input
+                type="number"
+                id="amount"
+                value={showEditModal.amount}
+                onChange={handleEditChange}
+                required
+                min="0.01"
+                step="0.01"
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-gray-900 transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="date"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                วันที่
+              </label>
+              <input
+                type="date"
+                id="date"
+                value={showEditModal.date}
+                onChange={handleEditChange}
+                required
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-gray-900 transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
               <button
-                onClick={() => setShowDeleteConfirm(null)}
-                className="w-full px-4 py-2 font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+                type="button"
+                onClick={() => setShowEditModal(null)}
+                className="rounded-xl bg-gray-100 px-5 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-200"
               >
                 ยกเลิก
               </button>
               <button
-                onClick={() => handleDelete(showDeleteConfirm)}
-                disabled={isDeleting}
-                className="w-full px-4 py-2 font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                type="submit"
+                disabled={isUpdating}
+                className="rounded-xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 disabled:opacity-60"
               >
-                {isDeleting ? 'กำลังลบ...' : 'ยืนยันการลบ'}
+                {isUpdating ? 'กำลังบันทึก...' : 'บันทึกการแก้ไข'}
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* --- Modal (Edit Transaction) --- */}
-      {showEditModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white bg-opacity-75 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md transition-transform scale-100">
-            <form onSubmit={handleEditSubmit}>
-              {/* Modal Header */}
-              <div className="flex justify-between items-center p-4 border-b">
-                <h3 className="text-xl font-bold text-gray-800">แก้ไขรายการ</h3>
-                <button
-                  type="button"
-                  onClick={() => setShowEditModal(null)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  ✕
-                </button>
-              </div>
-
-              {/* Modal Body */}
-              <div className="p-6 space-y-4">
-                {/* ประเภท (แสดงผลอย่างเดียว) */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    ประเภท
-                  </label>
-                  <input
-                    type="text"
-                    disabled
-                    value={
-                      showEditModal.type === "expense"
-                        ? "รายจ่าย"
-                        : showEditModal.type === "income"
-                        ? "รายรับ"
-                        : "โยกย้าย"
-                    }
-                    className="w-full px-4 py-3 bg-gray-100 border border-gray-300 text-gray-600 rounded-lg"
-                  />
-                </div>
-
-                {/* หมวดหมู่ (Dropdown) */}
-                <div>
-                  <label
-                    htmlFor="category"
-                    className="block text-sm font-medium text-gray-700 mb-1"
-                  >
-                    หมวดหมู่
-                  </label>
-                  <select
-                    id="category"
-                    value={showEditModal.category}
-                    onChange={handleEditChange}
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    {/* กรองหมวดหมู่ตามประเภท */}
-                    {categories
-                      .filter(cat => cat.type?.name === (
-                        showEditModal.type === "expense" ? "Expense" :
-                        showEditModal.type === "income" ? "Income" : "Transfer"
-                      ))
-                      .map((cat) => (
-                        <option key={cat.id} value={cat.name}>
-                          {cat.name}
-                        </option>
-                      ))}
-                  </select>
-                </div>
-
-                {/* บัญชี (Dropdown) */}
-                <div>
-                  <label
-                    htmlFor="account"
-                    className="block text-sm font-medium text-gray-700 mb-1"
-                  >
-                    บัญชี
-                  </label>
-                  <select
-                    id="account"
-                    value={showEditModal.account}
-                    onChange={handleEditChange}
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    {accounts.map((acc) => (
-                      <option key={acc.id} value={acc.name}>
-                        {acc.name} (คงเหลือ: {parseFloat(acc.balance || acc.amount || '0').toLocaleString()} บาท)
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* จำนวนเงิน */}
-                <div>
-                  <label
-                    htmlFor="amount"
-                    className="block text-sm font-medium text-gray-700 mb-1"
-                  >
-                    จำนวนเงิน
-                  </label>
-                  <input
-                    type="number"
-                    id="amount"
-                    value={showEditModal.amount}
-                    onChange={handleEditChange}
-                    required
-                    min="0.01"
-                    step="0.01"
-                    className="w-full px-4 py-3 border border-gray-300 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                {/* วันที่ */}
-                <div>
-                  <label
-                    htmlFor="date"
-                    className="block text-sm font-medium text-gray-700 mb-1"
-                  >
-                    วันที่
-                  </label>
-                  <input
-                    type="date"
-                    id="date"
-                    value={showEditModal.date}
-                    onChange={handleEditChange}
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-
-              {/* Modal Footer */}
-              <div className="flex justify-end gap-3 p-4 bg-gray-50 border-t">
-                <button
-                  type="button"
-                  onClick={() => setShowEditModal(null)}
-                  className="px-4 py-2 font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
-                >
-                  ยกเลิก
-                </button>
-                <button
-                  type="submit"
-                  disabled={isUpdating}
-                  className="px-4 py-2 font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isUpdating ? 'กำลังบันทึก...' : 'บันทึกการแก้ไข'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+          </form>
+        </FormModal>
       )}
       </div>
     </AuthGuard>

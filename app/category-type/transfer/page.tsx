@@ -1,9 +1,12 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { getCategoriesByType, createCategory, updateCategory, deleteCategory } from '@/lib/categories';
 import { getAllTypes } from '@/lib/types';
 import { getAuthToken } from '@/lib/auth';
+import AlertBanner from '@/components/ui/AlertBanner';
+import ConfirmModal from '@/components/ui/ConfirmModal';
+import FormModal from '@/components/ui/FormModal';
 
 // --- ไอคอน SVG (คัดลอกมา) ---
 const ArrowLeftIcon = () => (
@@ -66,22 +69,6 @@ const DeleteIcon = () => (
     />
   </svg>
 );
-const CloseIcon = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    className="h-6 w-6"
-    fill="none"
-    viewBox="0 0 24 24"
-    stroke="currentColor"
-    strokeWidth={2}
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M6 18L18 6M6 6l12 12"
-    />
-  </svg>
-);
 const CheckCircleIcon = () => (
   <svg
     className="h-6 w-6 mr-2"
@@ -95,6 +82,18 @@ const CheckCircleIcon = () => (
       strokeLinejoin="round"
       d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
     />
+  </svg>
+);
+const ArrowsIcon: React.FC<{ className?: string }> = ({ className = "h-6 w-6 text-white" }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    className={className}
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+    strokeWidth={1.8}
+  >
+    <path strokeLinecap="round" strokeLinejoin="round" d="M7 7h10m0 0l-3-3m3 3l-3 3M17 17H7m0 0l3 3m-3-3l3-3" />
   </svg>
 );
 
@@ -133,50 +132,48 @@ const TransferCategoriesPage: React.FC = () => {
   const [deleteCategoryId, setDeleteCategoryId] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>("");
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
-  // โหลดข้อมูลเมื่อ component mount
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        const token = getAuthToken();
-        if (!token) {
-          router.push('/login');
-          return;
-        }
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError("");
+      const token = getAuthToken();
+      if (!token) {
+        router.push('/login');
+        return;
+      }
 
-        console.log("Loading types and transfer categories...");
-        
-        // โหลด types ก่อน
-        const typesResponse = await getAllTypes();
-        if (typesResponse.success && typesResponse.data) {
-          setTypes(typesResponse.data as Type[]);
-          
-          // หา transfer type ID
-          const transferType = (typesResponse.data as Type[]).find(type => type.name === 'Transfer');
-          if (transferType) {
-            setTransferTypeId(transferType.id);
-            
-            // โหลด categories สำหรับ transfer type
-            const categoriesResponse = await getCategoriesByType(transferType.id);
-            if (categoriesResponse.success && categoriesResponse.data) {
-              setCategories(categoriesResponse.data as Category[]);
-            }
+      console.log("Loading types and transfer categories...");
+      const typesResponse = await getAllTypes();
+      if (typesResponse.success && typesResponse.data) {
+        setTypes(typesResponse.data as Type[]);
+
+        const transferType = (typesResponse.data as Type[]).find((type) => type.name === 'Transfer');
+        if (transferType) {
+          setTransferTypeId(transferType.id);
+
+          const categoriesResponse = await getCategoriesByType(transferType.id);
+          if (categoriesResponse.success && categoriesResponse.data) {
+            setCategories(categoriesResponse.data as Category[]);
           }
         }
-      } catch (error: any) {
-        console.error('Load data error:', error);
-        setError(error.message || 'เกิดข้อผิดพลาดในการโหลดข้อมูล');
-        
-        if (error.message?.includes('authentication') || error.message?.includes('token')) {
-          router.push('/login');
-        }
-      } finally {
-        setLoading(false);
       }
-    };
+    } catch (error: any) {
+      console.error('Load data error:', error);
+      setError(error.message || 'เกิดข้อผิดพลาดในการโหลดข้อมูล');
 
-    loadData();
+      if (error.message?.includes('authentication') || error.message?.includes('token')) {
+        router.push('/login');
+      }
+    } finally {
+      setLoading(false);
+    }
   }, [router]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const handleOpenAddModal = () => {
     setEditingCategory(null);
@@ -195,8 +192,12 @@ const TransferCategoriesPage: React.FC = () => {
 
   // ดำเนินการลบจริง
   const handleDeleteCategory = async () => {
-    if (!deleteCategoryId) return;
-    
+    if (!deleteCategoryId) {
+      return;
+    }
+
+    setIsDeleting(true);
+
     try {
       const response = await deleteCategory(deleteCategoryId);
       
@@ -211,6 +212,7 @@ const TransferCategoriesPage: React.FC = () => {
       console.error('Delete category error:', error);
       setError(error.message || 'เกิดข้อผิดพลาดในการลบหมวดหมู่');
     } finally {
+      setIsDeleting(false);
       setDeleteCategoryId(null);
     }
   };
@@ -220,6 +222,11 @@ const TransferCategoriesPage: React.FC = () => {
     name: string;
   }) => {
     try {
+      if (!transferTypeId) {
+        setError('ไม่พบ ID ของประเภทการโอนเงิน');
+        return;
+      }
+
       if (formData.id) {
         // แก้ไข
         const response = await updateCategory(formData.id, {
@@ -267,6 +274,10 @@ const TransferCategoriesPage: React.FC = () => {
 
   // ลบ mockNavigate
 
+  const categoryPendingDelete = deleteCategoryId
+    ? categories.find((c) => c.id === deleteCategoryId)
+    : null;
+
   return (
     <div className="min-h-screen bg-gray-100 font-inter">
       {/* --- Header --- */}
@@ -287,6 +298,15 @@ const TransferCategoriesPage: React.FC = () => {
 
       {/* --- Main Content --- */}
       <main className="max-w-4xl mx-auto p-4 md:p-6">
+        {error && (
+          <AlertBanner
+            tone="error"
+            title="เกิดข้อผิดพลาด"
+            message={error}
+            onDismiss={() => setError('')}
+          />
+        )}
+
         <div className="bg-white p-6 rounded-lg shadow-lg">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-semibold text-gray-700">
@@ -305,18 +325,13 @@ const TransferCategoriesPage: React.FC = () => {
           <div className="flow-root">
             {loading ? (
               <div className="text-center py-8">
-                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                <p className="mt-2 text-gray-600">กำลังโหลด...</p>
-              </div>
-            ) : error ? (
-              <div className="text-center py-8">
-                <p className="text-red-600">{error}</p>
-                <button
-                  onClick={() => window.location.reload()}
-                  className="mt-2 text-blue-600 hover:text-blue-800"
-                >
-                  ลองใหม่
-                </button>
+                <div className="inline-flex items-center px-4 py-2 text-sm font-medium leading-6 text-gray-500 transition duration-150 ease-in-out">
+                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  กำลังโหลดข้อมูล...
+                </div>
               </div>
             ) : categories.length > 0 ? (
               <ul role="list" className="divide-y divide-gray-200">
@@ -343,38 +358,6 @@ const TransferCategoriesPage: React.FC = () => {
                       >
                         <DeleteIcon />
                       </button>
-                      {/* --- Modal แจ้งเตือนก่อนลบหมวดหมู่ --- */}
-                      {deleteCategoryId && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white bg-opacity-80 backdrop-blur-sm">
-                          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm mx-4">
-                            <div className="flex flex-col items-center text-center">
-                              <DeleteIcon />
-                              <h3 className="text-xl font-bold text-gray-800 mt-4">
-                                ยืนยันการลบ
-                              </h3>
-                              <p className="text-gray-600 mt-2">
-                                คุณแน่ใจหรือไม่ว่าต้องการลบหมวดหมู่นี้?
-                                <br />
-                                การกระทำนี้ไม่สามารถยกเลิกได้
-                              </p>
-                            </div>
-                            <div className="flex justify-center gap-4 mt-6">
-                              <button
-                                onClick={() => setDeleteCategoryId(null)}
-                                className="w-full px-4 py-2 font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
-                              >
-                                ยกเลิก
-                              </button>
-                              <button
-                                onClick={handleDeleteCategory}
-                                className="w-full px-4 py-2 font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
-                              >
-                                ยืนยันการลบ
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   </li>
                 ))}
@@ -402,6 +385,19 @@ const TransferCategoriesPage: React.FC = () => {
           <span>{showToast}</span>
         </div>
       )}
+
+      <ConfirmModal
+        open={!!deleteCategoryId}
+        tone="danger"
+        title="ยืนยันการลบ"
+        message={(<span>คุณแน่ใจหรือไม่ว่าต้องการลบหมวดหมู่นี้?<br />การกระทำนี้ไม่สามารถยกเลิกได้</span>)}
+        highlight={categoryPendingDelete?.name || undefined}
+        confirmLabel={isDeleting ? 'กำลังลบ...' : 'ยืนยันการลบ'}
+        cancelLabel="ยกเลิก"
+        loading={isDeleting}
+        onCancel={() => setDeleteCategoryId(null)}
+        onConfirm={handleDeleteCategory}
+      />
     </div>
   );
 };
@@ -410,7 +406,7 @@ const TransferCategoriesPage: React.FC = () => {
 interface CategoryModalProps {
   category: Category | null;
   onClose: () => void;
-  onSave: (formData: { id: string | null; name: string }) => void;
+  onSave: (formData: { id: string | null; name: string }) => Promise<void>;
 }
 
 const CategoryModal: React.FC<CategoryModalProps> = ({
@@ -431,62 +427,57 @@ const CategoryModal: React.FC<CategoryModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-40 bg-white bg-opacity-80 flex items-center justify-center p-4">
-      <div
-        className="relative bg-white w-full max-w-lg rounded-lg shadow-xl p-6"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex justify-between items-center mb-5">
-          <h3 className="text-xl font-bold text-gray-800">
-            {category ? "แก้ไขหมวดหมู่" : "เพิ่มหมวดหมู่ใหม่"} (โอนเงิน)
-          </h3>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+    <FormModal
+      open
+      onClose={onClose}
+      title={category ? "แก้ไขหมวดหมู่" : "เพิ่มหมวดหมู่ใหม่"}
+      description="กำหนดหมวดหมู่สำหรับการโอนเงิน เพื่อจัดการการเคลื่อนย้ายเงินได้ง่ายขึ้น"
+  tone="warning"
+      icon={<ArrowsIcon className="h-7 w-7 text-white" />}
+      maxWidth="md"
+    >
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div>
+          <label
+            htmlFor="categoryName"
+            className="block text-sm font-medium text-gray-700 mb-1"
           >
-            <CloseIcon />
-          </button>
+            ชื่อหมวดหมู่ <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            id="categoryName"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-gray-900 transition focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-200"
+            placeholder="เช่น โอนเข้าออมทรัพย์"
+          />
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <label
-              htmlFor="categoryName"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              ชื่อหมวดหมู่ <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              id="categoryName"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              className="w-full px-4 py-3 border border-gray-300 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="เช่น โอนเข้าออมทรัพย์"
-            />
-          </div>
+        {error && (
+          <p className="rounded-xl bg-red-50 px-4 py-2 text-sm font-medium text-red-600">
+            {error}
+          </p>
+        )}
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
-
-          <div className="flex justify-end space-x-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-5 py-2 rounded-lg text-gray-700 bg-gray-100 hover:bg-gray-200"
-            >
-              ยกเลิก
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2 rounded-lg text-white bg-blue-600 hover:bg-blue-700"
-            >
-              บันทึก
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className="flex justify-end gap-3 pt-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl bg-gray-100 px-5 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-200"
+          >
+            ยกเลิก
+          </button>
+          <button
+            type="submit"
+            className="rounded-xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
+          >
+            บันทึก
+          </button>
+        </div>
+      </form>
+    </FormModal>
   );
 };
 

@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from 'next/navigation';
 import { createTransaction } from '@/lib/transactions';
 import { getAllAccounts } from '@/lib/accounts';
@@ -7,8 +7,7 @@ import { getAllCategories } from '@/lib/categories';
 import { getAuthToken } from '@/lib/auth';
 import { Account, Category } from '@/lib/types';
 import AuthGuard from '@/components/AuthGuard';
-import NotificationModal from '@/components/NotificationModal';
-import { useNotification } from '@/components/useNotification';
+import AlertBanner from '@/components/ui/AlertBanner';
 
 // --- ไอคอน SVG ---
 const ArrowLeftIcon = () => (
@@ -142,24 +141,8 @@ function NewTransactionPage() {
   const [updatedAccounts, setUpdatedAccounts] = useState<Set<string>>(new Set());
 
   // โหลดข้อมูลเริ่มต้น
-  useEffect(() => {
-    console.log('Component mounted, loading reference data...');
-    
-    // Debug token information
-    const token = getAuthToken();
-    console.log('Token check on mount:', {
-      hasToken: !!token,
-      tokenLength: token?.length,
-      tokenPreview: token ? token.substring(0, 20) + '...' : 'No token',
-      localStorage: typeof window !== 'undefined' ? localStorage.getItem('authToken') : 'N/A',
-      cookieHasAuth: typeof window !== 'undefined' ? document.cookie.includes('authToken') : 'N/A'
-    });
-    
-    loadReferenceData();
-  }, []);
-
   // โหลดข้อมูลบัญชีและหมวดหมู่
-  const loadReferenceData = async () => {
+  const loadReferenceData = useCallback(async () => {
     try {
       setLoading(true);
       setError(''); // Clear previous errors
@@ -231,7 +214,23 @@ function NewTransactionPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [router]);
+
+  useEffect(() => {
+    console.log('Component mounted, loading reference data...');
+
+    // Debug token information
+    const token = getAuthToken();
+    console.log('Token check on mount:', {
+      hasToken: !!token,
+      tokenLength: token?.length,
+      tokenPreview: token ? token.substring(0, 20) + '...' : 'No token',
+      localStorage: typeof window !== 'undefined' ? localStorage.getItem('authToken') : 'N/A',
+      cookieHasAuth: typeof window !== 'undefined' ? document.cookie.includes('authToken') : 'N/A'
+    });
+
+    loadReferenceData();
+  }, [loadReferenceData]);
 
   /**
    * รีเฟรชข้อมูลบัญชีหลังจากทำธุรกรรม
@@ -638,15 +637,20 @@ function NewTransactionPage() {
 
         {/* --- Error State --- */}
         {error && (
-          <div className="mb-4 p-4 bg-red-50 border-l-4 border-red-400">
-            <p className="text-red-700">{error}</p>
-            <button
-              onClick={loadReferenceData}
-              className="mt-2 px-4 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700"
-            >
-              ลองใหม่
-            </button>
-          </div>
+          <AlertBanner
+            tone="error"
+            title="เกิดข้อผิดพลาด"
+            message={error}
+            onDismiss={() => setError('')}
+            actions={(
+              <button
+                onClick={loadReferenceData}
+                className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-red-700"
+              >
+                ลองใหม่
+              </button>
+            )}
+          />
         )}
 
         <div className="bg-white rounded-lg shadow-lg overflow-hidden">

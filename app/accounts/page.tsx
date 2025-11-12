@@ -4,6 +4,9 @@ import { useRouter } from "next/navigation";
 import { getAllAccounts, createAccount, updateAccount, deleteAccount } from '@/lib/accounts';
 import { getAuthToken } from '@/lib/auth';
 import { Account, AccountFormData } from '@/lib/types';
+import AlertBanner from '@/components/ui/AlertBanner';
+import ConfirmModal from '@/components/ui/ConfirmModal';
+import FormModal from '@/components/ui/FormModal';
 
 // --- ไอคอน SVG ---
 const ArrowLeftIcon = () => (
@@ -66,22 +69,6 @@ const DeleteIcon = () => (
     />
   </svg>
 );
-const CloseIcon = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    className="h-6 w-6"
-    fill="none"
-    viewBox="0 0 24 24"
-    stroke="currentColor"
-    strokeWidth={2}
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M6 18L18 6M6 6l12 12"
-    />
-  </svg>
-);
 const CheckCircleIcon = () => (
   <svg
     className="h-6 w-6 mr-2"
@@ -97,10 +84,10 @@ const CheckCircleIcon = () => (
     />
   </svg>
 );
-const WalletIcon = () => (
+const WalletIcon: React.FC<{ className?: string }> = ({ className = "h-6 w-6 text-gray-700" }) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
-    className="h-6 w-6 text-gray-700"
+    className={className}
     fill="none"
     viewBox="0 0 24 24"
     stroke="currentColor"
@@ -130,6 +117,7 @@ function AccountsPage() {
   const [deleteAccountId, setDeleteAccountId] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>("");
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
   // โหลดข้อมูลบัญชีเมื่อ component mount
   useEffect(() => {
@@ -193,23 +181,28 @@ function AccountsPage() {
    * ดำเนินการลบจริง
    */
   const handleDeleteAccount = async () => {
-    if (deleteAccountId) {
-      try {
-        console.log("Deleting account:", deleteAccountId);
-        const response = await deleteAccount(deleteAccountId);
-        
-        if (response.success) {
-          setAccounts((prev) => prev.filter((acc) => acc.id !== deleteAccountId));
-          showToastMessage("ลบบัญชีสำเร็จ!");
-        } else {
-          setError(response.message || 'ไม่สามารถลบบัญชีได้');
-        }
-      } catch (error: any) {
-        console.error('Delete account error:', error);
-        setError(error.message || 'เกิดข้อผิดพลาดในการลบบัญชี');
-      } finally {
-        setDeleteAccountId(null);
+    if (!deleteAccountId) {
+      return;
+    }
+
+    setIsDeleting(true);
+
+    try {
+      console.log("Deleting account:", deleteAccountId);
+      const response = await deleteAccount(deleteAccountId);
+      
+      if (response.success) {
+        setAccounts((prev) => prev.filter((acc) => acc.id !== deleteAccountId));
+        showToastMessage("ลบบัญชีสำเร็จ!");
+      } else {
+        setError(response.message || 'ไม่สามารถลบบัญชีได้');
       }
+    } catch (error: any) {
+      console.error('Delete account error:', error);
+      setError(error.message || 'เกิดข้อผิดพลาดในการลบบัญชี');
+    } finally {
+      setIsDeleting(false);
+      setDeleteAccountId(null);
     }
   };
 
@@ -278,6 +271,10 @@ function AccountsPage() {
 
   // ลบ mockNavigate
 
+  const accountPendingDelete = deleteAccountId
+    ? accounts.find((acc) => acc.id === deleteAccountId)
+    : null;
+
   return (
     <div className="min-h-screen bg-gray-100 font-inter">
       {/* --- Header --- */}
@@ -298,15 +295,12 @@ function AccountsPage() {
       <main className="max-w-4xl mx-auto p-4 md:p-6">
         {/* Error Message */}
         {error && (
-          <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
-            {error}
-            <button 
-              onClick={() => setError('')}
-              className="ml-2 text-red-500 hover:text-red-700"
-            >
-              ✕
-            </button>
-          </div>
+          <AlertBanner
+            tone="error"
+            title="เกิดข้อผิดพลาด"
+            message={error}
+            onDismiss={() => setError('')}
+          />
         )}
 
         <div className="bg-white p-6 rounded-lg shadow-lg">
@@ -371,37 +365,6 @@ function AccountsPage() {
                         <DeleteIcon />
                       </button>
                       {/* --- Modal แจ้งเตือนก่อนลบบัญชี --- */}
-                      {deleteAccountId && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white bg-opacity-80 backdrop-blur-sm">
-                          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm mx-4">
-                            <div className="flex flex-col items-center text-center">
-                              <DeleteIcon />
-                              <h3 className="text-xl font-bold text-gray-800 mt-4">
-                                ยืนยันการลบ
-                              </h3>
-                              <p className="text-gray-600 mt-2">
-                                คุณแน่ใจหรือไม่ว่าต้องการลบบัญชีนี้?
-                                <br />
-                                การกระทำนี้ไม่สามารถยกเลิกได้
-                              </p>
-                            </div>
-                            <div className="flex justify-center gap-4 mt-6">
-                              <button
-                                onClick={() => setDeleteAccountId(null)}
-                                className="w-full px-4 py-2 font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
-                              >
-                                ยกเลิก
-                              </button>
-                              <button
-                                onClick={handleDeleteAccount}
-                                className="w-full px-4 py-2 font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
-                              >
-                                ยืนยันการลบ
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   </li>
                 ))}
@@ -430,6 +393,23 @@ function AccountsPage() {
           <span>{showToast}</span>
         </div>
       )}
+
+      <ConfirmModal
+        open={!!deleteAccountId}
+        tone="danger"
+        title="ยืนยันการลบ"
+        message={(
+          <span>
+            คุณแน่ใจหรือไม่ว่าต้องการลบบัญชีนี้?<br />การกระทำนี้ไม่สามารถยกเลิกได้
+          </span>
+        )}
+        highlight={accountPendingDelete?.name || undefined}
+        confirmLabel={isDeleting ? 'กำลังลบ...' : 'ยืนยันการลบ'}
+        cancelLabel="ยกเลิก"
+        loading={isDeleting}
+        onCancel={() => setDeleteAccountId(null)}
+        onConfirm={handleDeleteAccount}
+      />
     </div>
   );
 }
@@ -466,89 +446,71 @@ const AccountModal: React.FC<AccountModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-white bg-opacity-80 backdrop-blur-sm">
-      <div
-        className="relative bg-white w-full max-w-lg rounded-lg shadow-xl p-6"
-        onClick={(e) => e.stopPropagation()} // ป้องกันการปิด Modal เมื่อคลิกข้างใน
-      >
-        {/* --- Header Modal --- */}
-        <div className="flex justify-between items-center mb-5">
-          <h3 className="text-xl font-bold text-gray-800">
-            {account ? "แก้ไขบัญชี" : "เพิ่มบัญชีใหม่"}
-          </h3>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
-            <CloseIcon />
-          </button>
+    <FormModal
+      open
+      onClose={onClose}
+      title={account ? "แก้ไขบัญชี" : "เพิ่มบัญชีใหม่"}
+      description="กรอกชื่อบัญชีและยอดเงินเพื่อจัดระเบียบการเงินของคุณให้ชัดเจนยิ่งขึ้น"
+      tone="primary"
+      icon={<WalletIcon className="h-7 w-7 text-white" />}
+    >
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="space-y-2">
+          <label htmlFor="accountName" className="text-sm font-medium text-gray-700">
+            ชื่อบัญชี <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            id="accountName"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-gray-900 transition focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-200"
+            placeholder="เช่น กสิกร, เงินสด, วอลเล็ต"
+          />
         </div>
 
-        {/* --- Form ใน Modal --- */}
-        <form onSubmit={handleSubmit} className="space-y-5">
-          {/* ช่องกรอกชื่อ */}
-          <div>
-            <label
-              htmlFor="accountName"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              ชื่อบัญชี <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              id="accountName"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              className="w-full px-4 py-3 border border-gray-300 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="เช่น กสิกร, เงินสด, วอลเล็ต"
-            />
-          </div>
+        <div className="space-y-2">
+          <label htmlFor="initialBalance" className="text-sm font-medium text-gray-700">
+            ยอดเงินเริ่มต้น (หรือปัจจุบัน)
+          </label>
+          <input
+            type="number"
+            id="initialBalance"
+            value={amount}
+            onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
+            required
+            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-gray-900 transition focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-200"
+            placeholder="0.00"
+            step="0.01"
+            min="0"
+          />
+        </div>
 
-          {/* ช่องกรอกยอดเงินเริ่มต้น */}
-          <div>
-            <label
-              htmlFor="initialBalance"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              ยอดเงินเริ่มต้น (หรือปัจจุบัน)
-            </label>
-            <input
-              type="number"
-              id="initialBalance"
-              value={amount}
-              onChange={(e) =>
-                setAmount(parseFloat(e.target.value) || 0)
-              }
-              required
-              className="w-full px-4 py-3 border border-gray-300 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="0.00"
-              step="0.01"
-            />
-          </div>
+        {error && (
+          <p className="rounded-xl bg-red-50 px-4 py-2 text-sm font-medium text-red-600">
+            {error}
+          </p>
+        )}
 
-          {/* แสดง Error (ถ้ามี) */}
-          {error && <p className="text-sm text-red-600">{error}</p>}
-
-          {/* --- Footer Modal (ปุ่ม) --- */}
-          <div className="flex justify-end space-x-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-5 py-2 rounded-lg text-gray-700 bg-gray-100 hover:bg-gray-200"
-            >
-              ยกเลิก
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2 rounded-lg text-white bg-blue-600 hover:bg-blue-700"
-            >
-              บันทึก
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className="flex flex-wrap justify-end gap-3 pt-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl bg-gray-100 px-5 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-200"
+          >
+            ยกเลิก
+          </button>
+          <button
+            type="submit"
+            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2 text-sm font-semibold text-white shadow hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
+          >
+            {account ? <EditIcon /> : <PlusIcon />}
+            {account ? "บันทึกการแก้ไข" : "บันทึกบัญชี"}
+          </button>
+        </div>
+      </form>
+    </FormModal>
   );
 };
 

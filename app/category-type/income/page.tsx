@@ -4,6 +4,9 @@ import { useRouter } from "next/navigation";
 import { getCategoriesByType, createCategory, updateCategory, deleteCategory } from '@/lib/categories';
 import { getAllTypes } from '@/lib/types';
 import { getAuthToken } from '@/lib/auth';
+import AlertBanner from '@/components/ui/AlertBanner';
+import ConfirmModal from '@/components/ui/ConfirmModal';
+import FormModal from '@/components/ui/FormModal';
 
 // --- ไอคอน SVG (คัดลอกมา) ---
 const ArrowLeftIcon = () => (
@@ -66,22 +69,6 @@ const DeleteIcon = () => (
     />
   </svg>
 );
-const CloseIcon = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    className="h-6 w-6"
-    fill="none"
-    viewBox="0 0 24 24"
-    stroke="currentColor"
-    strokeWidth={2}
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M6 18L18 6M6 6l12 12"
-    />
-  </svg>
-);
 const CheckCircleIcon = () => (
   <svg
     className="h-6 w-6 mr-2"
@@ -94,6 +81,22 @@ const CheckCircleIcon = () => (
       strokeLinecap="round"
       strokeLinejoin="round"
       d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+    />
+  </svg>
+);
+const TagIcon: React.FC<{ className?: string }> = ({ className = "h-6 w-6 text-white" }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    className={className}
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+    strokeWidth={2}
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M7 7h.01M7 3h5l5.414 5.414a2 2 0 010 2.828l-5.414 5.414A2 2 0 0111 17H6a3 3 0 01-3-3V7a4 4 0 014-4z"
     />
   </svg>
 );
@@ -133,6 +136,7 @@ const IncomeCategoriesPage: React.FC = () => {
   const [deleteCategoryId, setDeleteCategoryId] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>("");
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
   // โหลดข้อมูลจาก API
   const loadCategories = async () => {
@@ -216,24 +220,28 @@ const IncomeCategoriesPage: React.FC = () => {
 
   // ดำเนินการลบจริง (Soft Delete)
   const handleDeleteCategory = async () => {
-    if (deleteCategoryId) {
-      try {
-        console.log("Deleting category:", deleteCategoryId);
-        const response = await deleteCategory(deleteCategoryId);
-        
-        if (response.success) {
-          // รีเฟรชข้อมูลหมวดหมู่จาก API แทนการลบออกจาก state
-          await loadCategories();
-          showToastMessage("ลบหมวดหมู่สำเร็จ!");
-        } else {
-          setError(response.message || 'ไม่สามารถลบหมวดหมู่ได้');
-        }
-      } catch (error: any) {
-        console.error('Delete category error:', error);
-        setError(error.message || 'เกิดข้อผิดพลาดในการลบหมวดหมู่');
-      } finally {
-        setDeleteCategoryId(null);
+    if (!deleteCategoryId) {
+      return;
+    }
+
+    setIsDeleting(true);
+
+    try {
+      console.log("Deleting category:", deleteCategoryId);
+      const response = await deleteCategory(deleteCategoryId);
+      
+      if (response.success) {
+        await loadCategories();
+        showToastMessage("ลบหมวดหมู่สำเร็จ!");
+      } else {
+        setError(response.message || 'ไม่สามารถลบหมวดหมู่ได้');
       }
+    } catch (error: any) {
+      console.error('Delete category error:', error);
+      setError(error.message || 'เกิดข้อผิดพลาดในการลบหมวดหมู่');
+    } finally {
+      setIsDeleting(false);
+      setDeleteCategoryId(null);
     }
   };
 
@@ -303,6 +311,10 @@ const IncomeCategoriesPage: React.FC = () => {
     }, 3000);
   };
 
+  const categoryPendingDelete = deleteCategoryId
+    ? categories.find((c) => c.id === deleteCategoryId)
+    : null;
+
   return (
     <div className="min-h-screen bg-gray-100 font-inter">
       {/* --- Header --- */}
@@ -325,15 +337,12 @@ const IncomeCategoriesPage: React.FC = () => {
       <main className="max-w-4xl mx-auto p-4 md:p-6">
         {/* Error Message */}
         {error && (
-          <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
-            {error}
-            <button 
-              onClick={() => setError('')}
-              className="ml-2 text-red-500 hover:text-red-700"
-            >
-              ✕
-            </button>
-          </div>
+          <AlertBanner
+            tone="error"
+            title="เกิดข้อผิดพลาด"
+            message={error}
+            onDismiss={() => setError('')}
+          />
         )}
 
         <div className="bg-white p-6 rounded-lg shadow-lg">
@@ -401,33 +410,6 @@ const IncomeCategoriesPage: React.FC = () => {
         </div>
       </main>
 
-      {/* --- Modal แจ้งเตือนก่อนลบหมวดหมู่ --- */}
-      {deleteCategoryId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white bg-opacity-80 backdrop-blur-sm">
-          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm mx-4">
-            <div className="flex flex-col items-center text-center">
-              <DeleteIcon />
-              <h3 className="text-xl font-bold text-gray-800 mt-4">ยืนยันการลบ</h3>
-              <p className="text-gray-600 mt-2">คุณแน่ใจหรือไม่ว่าต้องการลบหมวดหมู่นี้?<br/>การกระทำนี้ไม่สามารถยกเลิกได้</p>
-            </div>
-            <div className="flex justify-center gap-4 mt-6">
-              <button
-                onClick={() => setDeleteCategoryId(null)}
-                className="w-full px-4 py-2 font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
-              >
-                ยกเลิก
-              </button>
-              <button
-                onClick={handleDeleteCategory}
-                className="w-full px-4 py-2 font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
-              >
-                ยืนยันการลบ
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* --- Modal (หน้าต่างเด้ง) สำหรับ เพิ่ม/แก้ไข --- */}
       {isModalOpen && (
         <CategoryModal
@@ -444,6 +426,23 @@ const IncomeCategoriesPage: React.FC = () => {
           <span>{showToast}</span>
         </div>
       )}
+
+      <ConfirmModal
+        open={!!deleteCategoryId}
+        tone="danger"
+        title="ยืนยันการลบ"
+        message={(
+          <span>
+            คุณแน่ใจหรือไม่ว่าต้องการลบหมวดหมู่นี้?<br />การกระทำนี้ไม่สามารถยกเลิกได้
+          </span>
+        )}
+        highlight={categoryPendingDelete?.name || undefined}
+        confirmLabel={isDeleting ? 'กำลังลบ...' : 'ยืนยันการลบ'}
+        cancelLabel="ยกเลิก"
+        loading={isDeleting}
+        onCancel={() => setDeleteCategoryId(null)}
+        onConfirm={handleDeleteCategory}
+      />
     </div>
   );
 };
@@ -476,66 +475,57 @@ const CategoryModal: React.FC<CategoryModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-40 bg-white bg-opacity-80 flex items-center justify-center p-4">
-      <div
-        className="relative bg-white w-full max-w-lg rounded-lg shadow-xl p-6"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* --- Header Modal --- */}
-        <div className="flex justify-between items-center mb-5">
-          <h3 className="text-xl font-bold text-gray-800">
-            {category ? "แก้ไขหมวดหมู่" : "เพิ่มหมวดหมู่ใหม่"} (รายรับ)
-          </h3>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+    <FormModal
+      open
+      onClose={onClose}
+      title={category ? "แก้ไขหมวดหมู่" : "เพิ่มหมวดหมู่ใหม่"}
+      description="กำหนดหมวดหมู่สำหรับรายรับ เพื่อดูภาพรวมรายได้ได้ง่ายขึ้น"
+      tone="success"
+      icon={<TagIcon className="h-7 w-7 text-white" />}
+      maxWidth="md"
+    >
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div>
+          <label
+            htmlFor="categoryName"
+            className="block text-sm font-medium text-gray-700 mb-1"
           >
-            <CloseIcon />
-          </button>
+            ชื่อหมวดหมู่ <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            id="categoryName"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-gray-900 transition focus:border-green-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-green-200"
+            placeholder="เช่น เงินเดือน, รายได้เสริม"
+          />
         </div>
 
-        {/* --- Form ใน Modal --- */}
-        <form onSubmit={handleSubmit} className="space-y-5">
-          {/* ช่องกรอกชื่อ */}
-          <div>
-            <label
-              htmlFor="categoryName"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              ชื่อหมวดหมู่ <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              id="categoryName"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              className="w-full px-4 py-3 border border-gray-300 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-              placeholder="เช่น เงินเดือน, รายได้เสริม"
-            />
-          </div>
+        {error && (
+          <p className="rounded-xl bg-red-50 px-4 py-2 text-sm font-medium text-red-600">
+            {error}
+          </p>
+        )}
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
-
-          {/* --- Footer Modal (ปุ่ม) --- */}
-          <div className="flex justify-end space-x-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-5 py-2 rounded-lg text-gray-700 bg-gray-100 hover:bg-gray-200"
-            >
-              ยกเลิก
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2 rounded-lg text-white bg-green-600 hover:bg-green-700"
-            >
-              บันทึก
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className="flex justify-end gap-3 pt-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl bg-gray-100 px-5 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-200"
+          >
+            ยกเลิก
+          </button>
+          <button
+            type="submit"
+            className="rounded-xl bg-green-600 px-5 py-2 text-sm font-semibold text-white shadow hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-300 focus:ring-offset-2"
+          >
+            บันทึก
+          </button>
+        </div>
+      </form>
+    </FormModal>
   );
 };
 
