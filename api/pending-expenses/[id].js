@@ -209,6 +209,24 @@ const convertToTransaction = async (id, accountId, userId) => {
   }
 };
 
+// Mark pending expense as paid
+const markAsPaid = async (id, userId) => {
+  const query = `
+    UPDATE pending_expenses 
+    SET status = 'paid', updated_at = EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000
+    WHERE id = $1 AND user_id = $2 AND status != 'paid'
+    RETURNING *
+  `;
+  
+  const result = await pool.query(query, [id, userId]);
+  
+  if (result.rows.length === 0) {
+    throw new Error('Pending expense not found or already paid');
+  }
+  
+  return result.rows[0];
+};
+
 // Main handler
 export default async function handler(req, res) {
   try {
@@ -231,6 +249,43 @@ export default async function handler(req, res) {
         });
         break;
 
+      case 'POST':
+        const { action } = req.query;
+        
+        if (action === 'convert') {
+          // Convert to transaction
+          const { account_id } = req.body;
+          if (!account_id) {
+            return res.status(400).json({
+              success: false,
+              error: 'Account ID is required'
+            });
+          }
+          
+          const result = await convertToTransaction(id, account_id, userId);
+          res.status(200).json({
+            success: true,
+            message: 'Successfully converted pending expense to transaction',
+            data: result
+          });
+          
+        } else if (action === 'mark-paid') {
+          // Mark as paid
+          const updatedExpense = await markAsPaid(id, userId);
+          res.status(200).json({
+            success: true,
+            message: 'Successfully marked as paid',
+            data: updatedExpense
+          });
+          
+        } else {
+          return res.status(400).json({
+            success: false,
+            error: 'Invalid action. Use "convert" or "mark-paid"'
+          });
+        }
+        break;
+
       case 'PATCH':
         const updatedExpense = await updatePendingExpense(id, req.body, userId);
         res.status(200).json({
@@ -249,7 +304,7 @@ export default async function handler(req, res) {
         break;
 
       default:
-        res.setHeader('Allow', ['GET', 'PATCH', 'DELETE']);
+        res.setHeader('Allow', ['GET', 'POST', 'PATCH', 'DELETE']);
         res.status(405).json({
           success: false,
           error: `Method ${req.method} not allowed`

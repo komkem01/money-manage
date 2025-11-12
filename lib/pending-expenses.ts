@@ -156,7 +156,7 @@ export const convertToTransaction = async (id: string, account_id: string): Prom
       throw new Error('Authentication token not found');
     }
 
-    const response = await fetch(`${API_BASE_URL}/pending-expenses/${id}/convert`, {
+    const response = await fetch(`${API_BASE_URL}/pending-expenses/${id}?action=convert`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -182,8 +182,8 @@ export const markAsPaid = async (id: string): Promise<ApiResponse<PendingExpense
       throw new Error('Authentication token not found');
     }
 
-    const response = await fetch(`${API_BASE_URL}/pending-expenses/${id}/mark-paid`, {
-      method: 'PATCH',
+    const response = await fetch(`${API_BASE_URL}/pending-expenses/${id}?action=mark-paid`, {
+      method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`

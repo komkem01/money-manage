@@ -184,7 +184,7 @@ Deletes a pending expense.
 ```
 
 ### 6. Convert to Transaction
-**POST** `/pending-expenses/{id}/convert`
+**POST** `/pending-expenses/{id}?action=convert`
 
 Converts a pending expense to an actual transaction and updates account balance.
 
@@ -230,7 +230,7 @@ Converts a pending expense to an actual transaction and updates account balance.
 ```
 
 ### 7. Mark as Paid
-**PATCH** `/pending-expenses/{id}/mark-paid`
+**POST** `/pending-expenses/{id}?action=mark-paid`
 
 Marks a pending expense as paid without creating a transaction.
 
