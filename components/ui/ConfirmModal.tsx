@@ -12,6 +12,7 @@ interface ConfirmModalProps {
   cancelLabel?: string;
   loading?: boolean;
   tone?: ConfirmTone;
+  errorMessage?: string;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -89,6 +90,7 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
   cancelLabel = 'ยกเลิก',
   loading = false,
   tone = 'danger',
+  errorMessage,
   onConfirm,
   onCancel,
 }) => {
@@ -120,6 +122,11 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
           {highlight && (
             <div className="mt-4 rounded-xl bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700">
               {highlight}
+            </div>
+          )}
+          {errorMessage && (
+            <div className="mt-4 w-full rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+              {errorMessage}
             </div>
           )}
         </div>

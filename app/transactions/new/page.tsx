@@ -131,6 +131,7 @@ function NewTransactionPage() {
   // State สำหรับฟอร์ม
   const [amount, setAmount] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
+  const [transferCategory, setTransferCategory] = useState("");
   const [selectedAccount, setSelectedAccount] = useState("");
   const [transferFromAccount, setTransferFromAccount] = useState("");
   const [transferToAccount, setTransferToAccount] = useState("");
@@ -192,7 +193,22 @@ function NewTransactionPage() {
       }
 
       if (categoriesResponse.success && 'data' in categoriesResponse && categoriesResponse.data) {
-        setCategories(Array.isArray(categoriesResponse.data) ? categoriesResponse.data : [categoriesResponse.data]);
+        const nextCategories = Array.isArray(categoriesResponse.data) ? categoriesResponse.data : [categoriesResponse.data];
+        setCategories(nextCategories);
+
+        if (!selectedCategory) {
+          const firstExpense = nextCategories.find(cat => cat.type?.name === 'Expense');
+          if (firstExpense) {
+            setSelectedCategory(firstExpense.id);
+          }
+        }
+
+        if (!transferCategory) {
+          const firstTransferCategory = nextCategories.find(cat => cat.type?.name === 'Transfer');
+          if (firstTransferCategory) {
+            setTransferCategory(firstTransferCategory.id);
+          }
+        }
       } else {
         console.error('Failed to load categories:', categoriesResponse);
         setError(categoriesResponse.message || 'ไม่สามารถโหลดข้อมูลหมวดหมู่ได้');
@@ -200,7 +216,7 @@ function NewTransactionPage() {
     } catch (error: any) {
       console.error('Load reference data error:', error);
       let errorMessage = 'เกิดข้อผิดพลาดในการโหลดข้อมูล';
-      
+
       if (error.message?.includes('authentication') || error.message?.includes('token')) {
         errorMessage = 'การยืนยันตัวตนล้มเหลว กรุณาเข้าสู่ระบบใหม่';
         setTimeout(() => {
@@ -231,6 +247,39 @@ function NewTransactionPage() {
 
     loadReferenceData();
   }, [loadReferenceData]);
+
+  useEffect(() => {
+    if (!categories.length) return;
+
+    if (activeTab === 'expense') {
+      const expenseCategories = categories.filter(cat => cat.type?.name === 'Expense');
+      if (expenseCategories.length === 0) {
+        return;
+      }
+      const isValid = expenseCategories.some(cat => cat.id === selectedCategory);
+      if (!isValid) {
+        setSelectedCategory(expenseCategories[0].id);
+      }
+    } else if (activeTab === 'income') {
+      const incomeCategories = categories.filter(cat => cat.type?.name === 'Income');
+      if (incomeCategories.length === 0) {
+        return;
+      }
+      const isValid = incomeCategories.some(cat => cat.id === selectedCategory);
+      if (!isValid) {
+        setSelectedCategory(incomeCategories[0].id);
+      }
+    } else {
+      const transferCategories = categories.filter(cat => cat.type?.name === 'Transfer');
+      if (transferCategories.length === 0) {
+        return;
+      }
+      const isValid = transferCategories.some(cat => cat.id === transferCategory);
+      if (!isValid) {
+        setTransferCategory(transferCategories[0].id);
+      }
+    }
+  }, [categories, activeTab, selectedCategory, transferCategory]);
 
   /**
    * รีเฟรชข้อมูลบัญชีหลังจากทำธุรกรรม
@@ -323,6 +372,12 @@ function NewTransactionPage() {
           }
         }
         
+        if (!transferCategory) {
+          alert("กรุณาเลือกหมวดหมู่สำหรับการโยกย้ายเงิน");
+          setIsSubmitting(false);
+          return;
+        }
+
         // สำหรับ transfer บันทึก account_id (บัญชีต้นทาง) และ related_account_id (บัญชีปลายทาง)
         transactionData = {
           amount: parseFloat(amount),
@@ -330,7 +385,7 @@ function NewTransactionPage() {
           date: date, // ส่งเป็น string ให้หลังบ้านแปลงเป็น Unix timestamp
           account_id: transferFromAccount, // บัญชีต้นทาง (เงินออก)
           related_account_id: transferToAccount, // บัญชีปลายทาง (เงินเข้า)
-          category_id: selectedCategory || categories.find(cat => cat.type?.name === "Transfer")?.id || categories[0]?.id,
+          category_id: transferCategory,
         };
       } else {
         // ตรวจสอบยอดเงินสำหรับรายจ่าย
@@ -389,13 +444,14 @@ function NewTransactionPage() {
         
         await refreshAccountData(affectedAccounts);
         
-        // รีเซ็ตฟอร์ม
-        setAmount('');
-        setDescription('');
-        setSelectedCategory('');
-        setSelectedAccount('');
-        setTransferFromAccount('');
-        setTransferToAccount('');
+    // รีเซ็ตฟอร์ม
+    setAmount('');
+    setDescription('');
+    setSelectedCategory('');
+    setTransferCategory('');
+    setSelectedAccount('');
+    setTransferFromAccount('');
+    setTransferToAccount('');
         
         setShowToast(true);
         
@@ -433,6 +489,38 @@ function NewTransactionPage() {
       // --- ฟอร์มสำหรับ "โยกย้าย" ---
       return (
         <div className="space-y-4">
+          <div className="relative">
+            <label
+              htmlFor="transferCategory"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              หมวดหมู่การโยกย้าย
+            </label>
+            <div className="relative">
+              <select
+                id="transferCategory"
+                value={transferCategory}
+                onChange={(e) => setTransferCategory(e.target.value)}
+                required
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
+              >
+                <option value="" disabled>
+                  เลือกหมวดหมู่
+                </option>
+                {categories
+                  .filter(cat => cat.type?.name === 'Transfer')
+                  .map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))}
+              </select>
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <TagIcon />
+              </div>
+            </div>
+          </div>
+
           {/* จากบัญชี */}
           <div className="relative">
             <label
@@ -574,190 +662,292 @@ function NewTransactionPage() {
     );
   };
 
+  const tabPalette: Record<TransactionType, {
+    gradient: string;
+    shadow: string;
+    inactive: string;
+    badge: string;
+    accent: string;
+    subtle: string;
+    ring: string;
+  }> = {
+    expense: {
+      gradient: 'from-rose-500 via-red-400 to-orange-400',
+      shadow: 'shadow-red-500/40',
+      inactive: 'text-slate-500 hover:bg-white hover:text-slate-700',
+      badge: 'bg-rose-100 text-rose-700',
+      accent: 'text-rose-500',
+      subtle: 'bg-rose-500/10',
+      ring: 'ring-rose-400/30',
+    },
+    income: {
+      gradient: 'from-emerald-500 via-emerald-400 to-teal-400',
+      shadow: 'shadow-emerald-500/40',
+      inactive: 'text-slate-500 hover:bg-white hover:text-slate-700',
+      badge: 'bg-emerald-100 text-emerald-700',
+      accent: 'text-emerald-500',
+      subtle: 'bg-emerald-500/10',
+      ring: 'ring-emerald-400/30',
+    },
+    transfer: {
+      gradient: 'from-sky-500 via-blue-500 to-indigo-500',
+      shadow: 'shadow-sky-500/40',
+      inactive: 'text-slate-500 hover:bg-white hover:text-slate-700',
+      badge: 'bg-sky-100 text-sky-700',
+      accent: 'text-sky-500',
+      subtle: 'bg-sky-500/10',
+      ring: 'ring-sky-400/30',
+    },
+  };
+
   const getTabClass = (tabName: TransactionType) => {
+    const palette = tabPalette[tabName];
     const isActive = activeTab === tabName;
-    let activeClasses = "";
-    if (tabName === "expense") activeClasses = "bg-red-600 text-white";
-    if (tabName === "income") activeClasses = "bg-green-600 text-white";
-    if (tabName === "transfer") activeClasses = "bg-blue-600 text-white";
-
-    const inactiveClasses = "text-gray-500 bg-gray-100 hover:bg-gray-200";
-
-    return `w-full py-3 text-center font-bold rounded-t-lg transition-all ${
-      isActive ? activeClasses : inactiveClasses
+    return `flex-1 rounded-full px-4 py-3 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${
+      isActive
+        ? `bg-gradient-to-r ${palette.gradient} text-white shadow-lg ${palette.shadow}`
+        : palette.inactive
     }`;
+  };
+
+  const tabCopy: Record<TransactionType, {
+    label: string;
+    blurb: string;
+    helper: string;
+  }> = {
+    expense: {
+      label: 'รายการรายจ่าย',
+      blurb: 'บันทึกการใช้จ่ายเพื่อรู้ทันกระแสเงินออกในทุกวัน',
+      helper: 'กรอกจำนวนเงิน เลือกหมวดหมู่ และบัญชีที่ใช้จ่าย',
+    },
+    income: {
+      label: 'รายการรายรับ',
+      blurb: 'ติดตามรายได้ให้ครบ เพื่อเห็นภาพรวมการเติบโตของเงิน',
+      helper: 'ระบุจำนวนเงิน เลือกหมวดหมู่ และบัญชีที่รับเงินเข้า',
+    },
+    transfer: {
+      label: 'การโยกย้ายเงิน',
+      blurb: 'ย้ายเงินระหว่างบัญชีอย่างเป็นระเบียบและปลอดภัย',
+      helper: 'เลือกหมวดหมู่ บัญชีต้นทาง และปลายทางให้ครบถ้วน',
+    },
+  };
+
+  const palette = tabPalette[activeTab];
+  const activeCopy = tabCopy[activeTab];
+  const heroIcons: Record<TransactionType, React.ReactNode> = {
+    expense: (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        className="h-6 w-6 text-white"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={1.8}
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
+        />
+      </svg>
+    ),
+    income: (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        className="h-6 w-6 text-white"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={1.8}
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M12 19V6m0 0l-4 4m4-4l4 4"
+        />
+      </svg>
+    ),
+    transfer: (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        className="h-6 w-6 text-white"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={1.8}
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" d="M6 7h9m0 0L11 3m4 4-4 4m3 6h-9m0 0 4 4m-4-4 4-4" />
+      </svg>
+    ),
   };
 
   return (
     <AuthGuard>
-      <div className="min-h-screen bg-gray-100 font-inter">
-        {/* --- Toast (ข้อความแจ้งเตือน) --- */}
+      <div className="relative min-h-screen overflow-hidden bg-slate-950 font-inter text-slate-100">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.25),transparent_60%),radial-gradient(circle_at_bottom,_rgba(16,185,129,0.18),transparent_55%)]" />
+
         {showToast && (
-        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 w-full max-w-sm">
-          <div className="p-4 rounded-lg shadow-lg bg-green-500 text-white animate-bounce">
-            <div className="flex items-center mb-2">
+          <div className="fixed top-6 left-1/2 z-50 w-full max-w-sm -translate-x-1/2">
+            <div className="flex items-start gap-3 rounded-2xl bg-emerald-500/95 px-4 py-4 shadow-2xl shadow-emerald-500/40 backdrop-blur">
               <CheckCircleIcon />
-              <span className="ml-3 font-semibold">บันทึกรายการสำเร็จ!</span>
-            </div>
-            <div className="text-sm text-green-100">
-              💰 ยอดเงินในบัญชีได้รับการอัปเดตแล้ว
-              <br />
-              🔄 กำลังโหลดข้อมูลใหม่...
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* --- Header --- */}
-      <header className="bg-white shadow-sm p-4 sticky top-0 z-10">
-        <div className="max-w-md mx-auto flex items-center relative">
-          <button
-            onClick={() => router.push("/transactions")}
-            className="absolute left-0 flex items-center px-2 py-2 text-sm font-medium rounded-md text-blue-600 hover:bg-blue-100"
-          >
-            <ArrowLeftIcon />
-          </button>
-          <h1 className="text-xl font-bold text-gray-800 text-center flex-1">
-            บันทึกรายการใหม่
-          </h1>
-        </div>
-      </header>
-
-      {/* --- Main Content (Form) --- */}
-      <main className="max-w-md mx-auto p-4">
-        {/* --- Loading State --- */}
-        {loading && (
-          <div className="mb-4 p-4 bg-blue-50 border-l-4 border-blue-400">
-            <div className="flex items-center">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-              <span className="ml-2 text-blue-700">กำลังโหลดข้อมูล...</span>
+              <div>
+                <p className="font-semibold leading-tight">บันทึกรายการสำเร็จ!</p>
+                <p className="mt-1 text-sm text-emerald-50/90">ยอดเงินอัปเดตแล้ว ระบบกำลังรีเฟรชข้อมูล...</p>
+              </div>
             </div>
           </div>
         )}
 
-        {/* --- Error State --- */}
-        {error && (
-          <AlertBanner
-            tone="error"
-            title="เกิดข้อผิดพลาด"
-            message={error}
-            onDismiss={() => setError('')}
-            actions={(
-              <button
-                onClick={loadReferenceData}
-                className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-red-700"
-              >
-                ลองใหม่
-              </button>
-            )}
-          />
-        )}
-
-        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-          {/* --- Tabs --- */}
-          <div className="flex">
+        <header className="relative z-10 px-4 pt-8">
+          <div className="mx-auto flex max-w-2xl items-center gap-3">
             <button
-              className={getTabClass("expense")}
-              onClick={() => setActiveTab("expense")}
+              onClick={() => router.push('/transactions')}
+              className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-2 text-sm font-medium text-sky-200 transition hover:bg-white/20"
             >
-              รายจ่าย
+              <ArrowLeftIcon />
+              กลับไปหน้ารายการ
             </button>
-            <button
-              className={getTabClass("income")}
-              onClick={() => setActiveTab("income")}
-            >
-              รายรับ
-            </button>
-            <button
-              className={getTabClass("transfer")}
-              onClick={() => setActiveTab("transfer")}
-            >
-              โยกย้าย
-            </button>
+            <div className="flex-1 text-center">
+              <h1 className="text-2xl font-semibold text-white">บันทึกรายการใหม่</h1>
+              <p className="mt-2 text-sm text-slate-300">
+                จัดสรรเงินเข้า-ออกได้อย่างมั่นใจด้วยแบบฟอร์มที่ออกแบบมาเพื่อคุณ
+              </p>
+            </div>
           </div>
+        </header>
 
-          {/* --- Form --- */}
-          <form onSubmit={handleSubmit} className="p-6 space-y-4">
-            {/* จำนวนเงิน */}
-            <div>
-              <label
-                htmlFor="amount"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                จำนวนเงิน
-              </label>
-              <input
-                type="number"
-                id="amount"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                required
-                className="w-full px-4 py-3 border border-gray-300 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="0.00"
-                step="0.01"
+        <main className="relative z-10 mx-auto mt-6 max-w-2xl px-4 pb-14">
+          {error && (
+            <div className="mb-5">
+              <AlertBanner
+                tone="error"
+                title="เกิดข้อผิดพลาด"
+                message={error}
+                onDismiss={() => setError('')}
+                actions={(
+                  <button
+                    onClick={loadReferenceData}
+                    className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-red-700"
+                  >
+                    ลองใหม่
+                  </button>
+                )}
               />
             </div>
+          )}
 
-            {/* ส่วนที่เปลี่ยนตาม Tab */}
-            {renderFormContent()}
-
-            {/* วันที่ */}
-            <div>
-              <label
-                htmlFor="date"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                วันที่
-              </label>
-              <div className="relative">
-                <input
-                  type="date"
-                  id="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  required
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <CalendarIcon />
-                </div>
+          <section className="space-y-6 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur">
+            <div className={`flex items-start gap-4 rounded-2xl border ${palette.ring} ${palette.subtle} px-4 py-4`}>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/15">
+                {heroIcons[activeTab]}
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-widest text-white/70">
+                  {activeCopy.label}
+                </p>
+                <h2 className="mt-1 text-lg font-semibold text-white">{activeCopy.blurb}</h2>
+                <p className="mt-2 text-sm text-slate-200/85">{activeCopy.helper}</p>
               </div>
             </div>
 
-            {/* รายละเอียด */}
-            <div>
-              <label
-                htmlFor="description"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                รายละเอียด (ไม่บังคับ)
-              </label>
-              <input
-                type="text"
-                id="description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="เช่น ค่ากาแฟ"
-              />
-            </div>
+            {loading && (
+              <div className="flex items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/10 px-4 py-5 text-slate-200">
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                <span>กำลังโหลดข้อมูลประกอบ...</span>
+              </div>
+            )}
 
-            {/* ปุ่มบันทึก */}
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className={`w-full font-bold py-3 px-4 rounded-lg text-white transition duration-300 shadow-md ${
-                isSubmitting
-                  ? "bg-gray-400 cursor-not-allowed"
-                  : "bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
-              }`}
-            >
-              {isSubmitting ? "กำลังบันทึก..." : "บันทึกรายการ"}
-            </button>
-          </form>
-        </div>
-      </main>
-    </div>
+            <div className="rounded-3xl bg-white text-slate-900 shadow-xl ring-1 ring-slate-100">
+              <div className="border-b border-slate-100 px-6 py-5">
+                <div className="flex items-center justify-between">
+                  <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${palette.badge}`}>
+                    {activeCopy.label}
+                  </span>
+                  <span className="text-xs text-slate-400">
+                    วันที่ {new Date(date).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' })}
+                  </span>
+                </div>
+                <p className="mt-3 text-sm text-slate-500">{activeCopy.helper}</p>
+              </div>
+
+              <div className="px-6 pb-6 pt-5">
+                <div className="flex gap-2 rounded-full bg-slate-100/70 p-1">
+                  <button type="button" className={getTabClass('expense')} onClick={() => setActiveTab('expense')}>
+                    รายจ่าย
+                  </button>
+                  <button type="button" className={getTabClass('income')} onClick={() => setActiveTab('income')}>
+                    รายรับ
+                  </button>
+                  <button type="button" className={getTabClass('transfer')} onClick={() => setActiveTab('transfer')}>
+                    โยกย้าย
+                  </button>
+                </div>
+
+                <form onSubmit={handleSubmit} className="mt-6 space-y-6">
+                  <div>
+                    <label htmlFor="amount" className="block text-sm font-semibold text-slate-700">
+                      จำนวนเงิน
+                    </label>
+                    <input
+                      type="number"
+                      id="amount"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      required
+                      placeholder="0.00"
+                      step="0.01"
+                      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 shadow-sm transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+                    />
+                  </div>
+
+                  {renderFormContent()}
+
+                  <div>
+                    <label htmlFor="date" className="block text-sm font-semibold text-slate-700">
+                      วันที่
+                    </label>
+                    <div className="relative mt-2">
+                      <input
+                        type="date"
+                        id="date"
+                        value={date}
+                        onChange={(e) => setDate(e.target.value)}
+                        required
+                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 shadow-sm transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+                      />
+                      <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400">
+                        <CalendarIcon />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="description" className="block text-sm font-semibold text-slate-700">
+                      รายละเอียด (ไม่บังคับ)
+                    </label>
+                    <input
+                      type="text"
+                      id="description"
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder="เช่น กาแฟยามเช้า หรือ โบนัสปลายปี"
+                      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 shadow-sm transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className={`w-full rounded-2xl bg-gradient-to-r ${palette.gradient} py-3 text-base font-semibold text-white shadow-lg transition hover:brightness-105 focus:outline-none focus:ring-2 focus:ring-white/40 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-70 ${palette.shadow}`}
+                  >
+                    {isSubmitting ? 'กำลังบันทึก...' : 'บันทึกรายการ'}
+                  </button>
+                </form>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
     </AuthGuard>
   );
 }

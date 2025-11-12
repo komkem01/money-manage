@@ -67,7 +67,7 @@ const ChevronRightIcon = () => (
 const EditIcon = () => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
-    className="h-5 w-5 text-yellow-600 hover:text-yellow-800"
+    className="h-4 w-4"
     fill="none"
     viewBox="0 0 24 24"
     stroke="currentColor"
@@ -83,7 +83,7 @@ const EditIcon = () => (
 const DeleteIcon = () => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
-    className="h-5 w-5 text-red-600 hover:text-red-800"
+    className="h-4 w-4"
     fill="none"
     viewBox="0 0 24 24"
     stroke="currentColor"
@@ -110,6 +110,18 @@ const CheckCircleIcon = () => (
       strokeLinejoin="round"
       d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
     />
+  </svg>
+);
+const TransferArrowIcon = () => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    className="h-4 w-4 text-blue-500"
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+    strokeWidth={1.8}
+  >
+    <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h9m0 0L10 4m3 3-3 3m10 10h-9m0 0 3 3m-3-3 3-3" />
   </svg>
 );
 const LedgerIcon = () => (
@@ -142,6 +154,8 @@ interface DisplayTransaction {
   type: TransactionType;
   categoryId: string;
   accountId: string;
+  relatedAccount?: string | null;
+  relatedAccountId?: string | null;
   description?: string;
 }
 
@@ -172,6 +186,8 @@ function TransactionListPage() {
   const [showEditModal, setShowEditModal] = useState<DisplayTransaction | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const [editError, setEditError] = useState('');
 
   // Transform API transaction to display transaction
   const transformApiTransaction = (apiTx: Transaction): DisplayTransaction => {
@@ -194,6 +210,8 @@ function TransactionListPage() {
       type,
       categoryId: apiTx.category_id,
       accountId: apiTx.account_id,
+      relatedAccount: apiTx.related_account?.name || null,
+      relatedAccountId: apiTx.related_account_id || null,
       description: apiTx.description || '',
     };
   };
@@ -290,6 +308,7 @@ function TransactionListPage() {
   const handleDelete = async (id: string) => {
     try {
       setIsDeleting(true);
+      setDeleteError('');
       const response = await deleteTransaction(id);
       
       if (response.success) {
@@ -302,7 +321,9 @@ function TransactionListPage() {
       }
     } catch (error: any) {
       console.error('Delete transaction error:', error);
-      setError(error.message || 'เกิดข้อผิดพลาดในการลบธุรกรรม');
+      const message = error.message || 'เกิดข้อผิดพลาดในการลบธุรกรรม';
+      setDeleteError(message);
+      setError(message);
     } finally {
       setIsDeleting(false);
     }
@@ -315,6 +336,7 @@ function TransactionListPage() {
 
     try {
       setIsUpdating(true);
+      setEditError('');
       
       const updateData = {
         amount: showEditModal.amount,
@@ -323,6 +345,24 @@ function TransactionListPage() {
         account_id: showEditModal.accountId,
         category_id: showEditModal.categoryId,
       };
+
+      if (showEditModal.type === 'transfer') {
+        if (!showEditModal.relatedAccountId) {
+          setEditError('กรุณาเลือกบัญชีปลายทางสำหรับการโยกย้าย');
+          setIsUpdating(false);
+          return;
+        }
+
+        if (showEditModal.relatedAccountId === showEditModal.accountId) {
+          setEditError('บัญชีต้นทางและปลายทางต้องไม่ซ้ำกัน');
+          setIsUpdating(false);
+          return;
+        }
+
+        Object.assign(updateData, {
+          related_account_id: showEditModal.relatedAccountId,
+        });
+      }
 
       const response = await updateTransaction(showEditModal.id, updateData);
       
@@ -336,7 +376,9 @@ function TransactionListPage() {
       }
     } catch (error: any) {
       console.error('Update transaction error:', error);
-      setError(error.message || 'เกิดข้อผิดพลาดในการแก้ไขธุรกรรม');
+      const message = error.message || 'เกิดข้อผิดพลาดในการแก้ไขธุรกรรม';
+      setEditError(message);
+      setError(message);
     } finally {
       setIsUpdating(false);
     }
@@ -365,6 +407,13 @@ function TransactionListPage() {
         ...prev, 
         account: selectedAccount?.name || prev.account,
         accountId: selectedAccount?.id || value
+      } : null);
+    } else if (id === "relatedAccount") {
+      const selectedAccount = accounts.find(acc => acc.id === value);
+      setShowEditModal(prev => prev ? {
+        ...prev,
+        relatedAccount: selectedAccount?.name || prev.relatedAccount || '',
+        relatedAccountId: selectedAccount?.id || value
       } : null);
     } else {
       setShowEditModal(prev => prev ? { ...prev, [id]: value } : null);
@@ -439,65 +488,93 @@ function TransactionListPage() {
           <div className="flex-grow">
             {!loading && !error && (
               transactions.length > 0 ? (
-                <ul className="divide-y divide-gray-200">
+                <ul className="space-y-4">
                   {transactions.map((t: DisplayTransaction) => (
-                  <li
-                    key={t.id}
-                    className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-4 px-2 hover:bg-gray-50 rounded-md"
-                  >
-                    {/* ส่วนข้อมูล (ซ้าย) */}
-                    <div className="flex-1 mb-2 sm:mb-0">
-                      <div className="flex items-center space-x-3">
-                        <span className="font-bold text-gray-800">
-                          {t.category}
-                        </span>
-                        {t.type === "transfer" && (
-                          <span className="text-xs font-medium bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
-                            โยกย้าย
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-sm text-gray-500">
-                        {t.account} •{" "}
-                        {new Date(t.date).toLocaleDateString("th-TH", {
-                          year: "numeric",
-                          month: "short",
-                          day: "numeric",
-                        })}
-                      </p>
-                    </div>
+                    <li key={t.id}>
+                      <div className="rounded-2xl border border-slate-200/60 bg-white/70 px-4 py-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg sm:px-6">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-lg font-semibold text-slate-900">
+                                {t.category}
+                              </span>
+                              <span
+                                className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${
+                                  t.type === "income"
+                                    ? "bg-emerald-100 text-emerald-700"
+                                    : t.type === "expense"
+                                      ? "bg-rose-100 text-rose-700"
+                                      : "bg-sky-100 text-sky-700"
+                                }`}
+                              >
+                                {t.type === "income" ? "รายรับ" : t.type === "expense" ? "รายจ่าย" : "โยกย้าย"}
+                              </span>
+                            </div>
+                            <div className="mt-2 flex flex-col gap-1 text-sm text-slate-500">
+                              <span>
+                                {new Date(t.date).toLocaleDateString("th-TH", {
+                                  year: "numeric",
+                                  month: "long",
+                                  day: "numeric",
+                                })}
+                              </span>
+                              {t.type === "transfer" ? (
+                                <span className="flex items-center gap-2 text-slate-600">
+                                  <span className="font-medium text-slate-700">{t.account}</span>
+                                  <TransferArrowIcon />
+                                  <span className="font-medium text-sky-600">{t.relatedAccount || 'ไม่ระบุปลายทาง'}</span>
+                                </span>
+                              ) : (
+                                <span>
+                                  บัญชี: <span className="font-medium text-slate-700">{t.account}</span>
+                                </span>
+                              )}
+                              {t.description && (
+                                <span className="text-slate-500">{t.description}</span>
+                              )}
+                            </div>
+                          </div>
 
-                    {/* ส่วนตัวเลขและปุ่ม (ขวา) */}
-                    <div className="flex items-center space-x-4 w-full sm:w-auto justify-between">
-                      <span
-                        className={`text-lg font-bold ${getTypeColor(t.type)}`}
-                      >
-                        {t.type === "income" ? "+" : "-"}
-                        {t.amount.toLocaleString("th-TH", {
-                          minimumFractionDigits: 2,
-                        })}{" "}
-                        ฿
-                      </span>
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => setShowEditModal(t)}
-                          className="p-1 rounded-md hover:bg-yellow-100"
-                          title="แก้ไข"
-                        >
-                          <EditIcon />
-                        </button>
-                        <button
-                          onClick={() => setShowDeleteConfirm(t.id)}
-                          className="p-1 rounded-md hover:bg-red-100"
-                          title="ลบ"
-                        >
-                          <DeleteIcon />
-                        </button>
+                          <div className="flex flex-col items-end gap-3 sm:items-end">
+                            <span
+                              className={`text-xl font-semibold ${getTypeColor(t.type)}`}
+                            >
+                              {t.type === "income" ? "+" : t.type === "expense" ? "-" : ""}
+                              {t.amount.toLocaleString("th-TH", {
+                                minimumFractionDigits: 2,
+                              })}{" "}
+                              ฿
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => {
+                                  setEditError('');
+                                  setShowEditModal(t);
+                                }}
+                                className="inline-flex items-center gap-2 rounded-xl border border-yellow-200 bg-yellow-50 px-3 py-1.5 text-sm font-medium text-yellow-700 transition hover:bg-yellow-100"
+                                title="แก้ไข"
+                              >
+                                <EditIcon />
+                                แก้ไข
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setDeleteError('');
+                                  setShowDeleteConfirm(t.id);
+                                }}
+                                className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-sm font-medium text-rose-700 transition hover:bg-rose-100"
+                                title="ลบ"
+                              >
+                                <DeleteIcon />
+                                ลบ
+                              </button>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+                    </li>
+                  ))}
+                </ul>
             ) : (
               <div className="text-center text-gray-500 py-20">
                 <p className="text-lg">ไม่มีรายการธุรกรรม</p>
@@ -555,18 +632,29 @@ function TransactionListPage() {
             คุณแน่ใจหรือไม่ว่าต้องการลบรายการนี้?<br />การกระทำนี้ไม่สามารถยกเลิกได้
           </span>
         )}
-        highlight={transactionPendingDelete?.category}
+        highlight={transactionPendingDelete
+          ? transactionPendingDelete.type === 'transfer'
+            ? `${transactionPendingDelete.account} → ${transactionPendingDelete.relatedAccount || 'ไม่ระบุปลายทาง'}`
+            : `${transactionPendingDelete.category}`
+          : undefined}
         confirmLabel={isDeleting ? 'กำลังลบ...' : 'ยืนยันการลบ'}
         cancelLabel="ยกเลิก"
         loading={isDeleting}
-        onCancel={() => setShowDeleteConfirm(null)}
+        errorMessage={deleteError || undefined}
+        onCancel={() => {
+          setDeleteError('');
+          setShowDeleteConfirm(null);
+        }}
         onConfirm={() => showDeleteConfirm && handleDelete(showDeleteConfirm)}
       />
 
       {showEditModal && (
         <FormModal
           open
-          onClose={() => setShowEditModal(null)}
+          onClose={() => {
+            setEditError('');
+            setShowEditModal(null);
+          }}
           title="แก้ไขรายการธุรกรรม"
           description="ปรับรายละเอียดรายการ เพื่อให้ประวัติการเงินของคุณถูกต้องอยู่เสมอ"
           tone="primary"
@@ -613,27 +701,79 @@ function TransactionListPage() {
               </select>
             </div>
 
-            <div>
-              <label
-                htmlFor="account"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                บัญชี
-              </label>
-              <select
-                id="account"
-                value={showEditModal.accountId}
-                onChange={handleEditChange}
-                required
-                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-gray-900 transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-              >
-                {accounts.map((acc) => (
-                  <option key={acc.id} value={acc.id}>
-                    {acc.name} (คงเหลือ: {parseFloat(acc.balance || acc.amount || '0').toLocaleString()} บาท)
-                  </option>
-                ))}
-              </select>
-            </div>
+            {showEditModal.type === 'transfer' ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label
+                    htmlFor="account"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
+                    จากบัญชี (ต้นทาง)
+                  </label>
+                  <select
+                    id="account"
+                    value={showEditModal.accountId}
+                    onChange={handleEditChange}
+                    required
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-gray-900 transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  >
+                    {accounts.map((acc) => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.name} (คงเหลือ: {parseFloat(acc.balance || acc.amount || '0').toLocaleString()} บาท)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label
+                    htmlFor="relatedAccount"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
+                    ไปยังบัญชี (ปลายทาง)
+                  </label>
+                  <select
+                    id="relatedAccount"
+                    value={showEditModal.relatedAccountId || ''}
+                    onChange={handleEditChange}
+                    required
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-gray-900 transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  >
+                    <option value="" disabled>
+                      เลือกบัญชีปลายทาง
+                    </option>
+                    {accounts
+                      .filter((acc) => acc.id !== showEditModal.accountId)
+                      .map((acc) => (
+                        <option key={acc.id} value={acc.id}>
+                          {acc.name} (คงเหลือ: {parseFloat(acc.balance || acc.amount || '0').toLocaleString()} บาท)
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <label
+                  htmlFor="account"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  บัญชี
+                </label>
+                <select
+                  id="account"
+                  value={showEditModal.accountId}
+                  onChange={handleEditChange}
+                  required
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-gray-900 transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                >
+                  {accounts.map((acc) => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.name} (คงเหลือ: {parseFloat(acc.balance || acc.amount || '0').toLocaleString()} บาท)
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div>
               <label
@@ -671,10 +811,19 @@ function TransactionListPage() {
               />
             </div>
 
+            {editError && (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+                {editError}
+              </div>
+            )}
+
             <div className="flex justify-end gap-3 pt-2">
               <button
                 type="button"
-                onClick={() => setShowEditModal(null)}
+                onClick={() => {
+                  setEditError('');
+                  setShowEditModal(null);
+                }}
                 className="rounded-xl bg-gray-100 px-5 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-200"
               >
                 ยกเลิก
