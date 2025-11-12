@@ -284,7 +284,7 @@ function TypesPage(): React.ReactElement {
                           {type.label}
                         </h3>
                         <p className="mt-1 text-sm text-slate-600 group-hover:text-slate-700">{type.description}</p>
-                        <p className="mt-2 text-xs text-slate-400">ID: {type.id}</p>
+                        {/* <p className="mt-2 text-xs text-slate-400">ID: {type.id}</p> */}
                       </div>
 
                       {/* ลูกศรชี้ */}
