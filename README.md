@@ -44,7 +44,7 @@
 
 - API แยกเป็น **Vercel Serverless Functions** (`api/*`)### ✅ Serverless Architecturepnpm dev
 
-- ใช้ **client pattern** สำหรับ `pg` library (ไม่ใช้ Pool) ป้องกัน connection leak
+- ใช้ **pg.Pool** ที่แชร์ทั่ว API เพื่อลด connection handshake และป้องกัน connection leak
 
 - รองรับ Auto-scaling และ cold start เร็ว- API ทั้งหมดเป็น **Vercel Serverless Functions**# or
 

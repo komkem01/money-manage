@@ -1,13 +1,6 @@
-const { Client } = require('pg');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-
-const getClient = () => {
-  return new Client({
-    connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false },
-  });
-};
+const { getClient } = require('./_db');
 
 const handler = async (req, res) => {
   // CORS
@@ -25,11 +18,9 @@ const handler = async (req, res) => {
     return res.status(405).json({ message: 'Method not allowed' });
   }
 
-  const client = getClient();
+  const client = await getClient();
   
   try {
-    await client.connect();
-    
     const { email, password } = req.body;
 
     // ค้นหา user
@@ -92,7 +83,7 @@ const handler = async (req, res) => {
       message: 'An error occurred during login. Please try again.',
     });
   } finally {
-    await client.end();
+    client.release();
   }
 };
 

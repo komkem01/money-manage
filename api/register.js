@@ -1,14 +1,6 @@
-const { Client } = require('pg');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-
-// ใช้ Client แทน Pool สำหรับ Serverless
-const getClient = () => {
-  return new Client({
-    connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false },
-  });
-};
+const { getClient } = require('./_db');
 
 const handler = async (req, res) => {
   // CORS
@@ -26,11 +18,9 @@ const handler = async (req, res) => {
     return res.status(405).json({ message: 'Method not allowed' });
   }
 
-  const client = getClient();
+  const client = await getClient();
   
   try {
-    await client.connect();
-    
     const { firstname, lastname, displayname, phone, email, password } = req.body;
 
     // ตรวจสอบ email ซ้ำ
@@ -88,7 +78,7 @@ const handler = async (req, res) => {
       message: 'An error occurred during registration. Please try again.',
     });
   } finally {
-    await client.end();
+    client.release();
   }
 };
 

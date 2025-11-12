@@ -1,60 +1,50 @@
-const { Client } = require('pg');
 const jwt = require('jsonwebtoken');
-
-const getClient = async () => {
-  const client = new Client({
-    connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false },
-  });
-  await client.connect();
-  return client;
-};
+const { getClient } = require('../_db');
 
 const authenticate = (handler) => async (req, res) => {
   const client = await getClient();
-  
+
   try {
     const authHeader = req.headers.authorization;
-    
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      await client.end();
-      return res.status(401).json({ 
-        success: false, 
+      return res.status(401).json({
+        success: false,
         error: 'UNAUTHORIZED',
-        message: '⚠️ ไม่พบ Token สำหรับยืนยันตัวตน กรุณาเข้าสู่ระบบใหม่' 
+        message: '⚠️ ไม่พบ Token สำหรับยืนยันตัวตน กรุณาเข้าสู่ระบบใหม่'
       });
     }
 
     const token = authHeader.substring(7);
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
+
     const userResult = await client.query(
       'SELECT * FROM users WHERE id = $1 AND deleted_at IS NULL',
       [decoded.userId]
     );
 
     if (userResult.rows.length === 0) {
-      await client.end();
-      return res.status(401).json({ 
+      return res.status(401).json({
         success: false,
-        error: 'USER_NOT_FOUND', 
-        message: '⚠️ ไม่พบข้อมูลผู้ใช้ กรุณาเข้าสู่ระบบใหม่' 
+        error: 'USER_NOT_FOUND',
+        message: '⚠️ ไม่พบข้อมูลผู้ใช้ กรุณาเข้าสู่ระบบใหม่'
       });
     }
 
     req.user = userResult.rows[0];
     req.userId = decoded.userId;
     req.client = client;
-    
-    return handler(req, res);
+
+    return await handler(req, res);
   } catch (error) {
     console.error('Authentication error:', error);
-    await client.end();
-    return res.status(401).json({ 
+    return res.status(401).json({
       success: false,
-      error: 'INVALID_TOKEN', 
-      message: '⚠️ Token ไม่ถูกต้องหรือหมดอายุ กรุณาเข้าสู่ระบบใหม่' 
+      error: 'INVALID_TOKEN',
+      message: '⚠️ Token ไม่ถูกต้องหรือหมดอายุ กรุณาเข้าสู่ระบบใหม่'
     });
+  } finally {
+    client.release();
   }
 };
 
@@ -94,17 +84,17 @@ const handler = async (req, res) => {
         );
 
         if (result.rows.length === 0) {
-          return res.status(404).json({ 
+          return res.status(404).json({
             success: false,
             error: 'ACCOUNT_NOT_FOUND',
-            message: '❌ ไม่พบบัญชีที่ต้องการ' 
+            message: '❌ ไม่พบบัญชีที่ต้องการ'
           });
         }
 
         const account = result.rows[0];
 
-        return res.json({ 
-          success: true, 
+        return res.json({
+          success: true,
           data: {
             ...account,
             balance: account.amount,
@@ -126,10 +116,10 @@ const handler = async (req, res) => {
         );
 
         if (existingResult.rows.length === 0) {
-          return res.status(404).json({ 
+          return res.status(404).json({
             success: false,
             error: 'ACCOUNT_NOT_FOUND',
-            message: '❌ ไม่พบบัญชีที่ต้องการแก้ไข' 
+            message: '❌ ไม่พบบัญชีที่ต้องการแก้ไข'
           });
         }
 
@@ -176,12 +166,11 @@ const handler = async (req, res) => {
               field: 'amount' 
             });
           }
-        }
+    }
 
-        // สร้าง update query แบบ dynamic
-  const updates = [];
-  const values = [];
-  let paramCount = 1;
+    const updates = [];
+    const values = [];
+    let paramCount = 1;
 
         if (name !== undefined) {
           updates.push(`name = $${paramCount}`);
@@ -315,8 +304,6 @@ const handler = async (req, res) => {
         message: '❌ เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่อีกครั้ง',
         details: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
-    } finally {
-      await client.end();
     }
   })(req, res);
 };

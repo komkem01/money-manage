@@ -1,14 +1,5 @@
-const { Client } = require('pg');
 const jwt = require('jsonwebtoken');
-
-const getClient = async () => {
-  const client = new Client({
-    connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false },
-  });
-  await client.connect();
-  return client;
-};
+const { getClient } = require('../_db');
 
 const authenticate = (handler) => async (req, res) => {
   const client = await getClient();
@@ -17,7 +8,6 @@ const authenticate = (handler) => async (req, res) => {
     const authHeader = req.headers.authorization;
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      await client.end();
       return res.status(401).json({ 
         success: false, 
         error: 'UNAUTHORIZED',
@@ -34,7 +24,6 @@ const authenticate = (handler) => async (req, res) => {
     );
 
     if (userResult.rows.length === 0) {
-      await client.end();
       return res.status(401).json({ 
         success: false,
         error: 'USER_NOT_FOUND', 
@@ -46,15 +35,16 @@ const authenticate = (handler) => async (req, res) => {
     req.userId = decoded.userId;
     req.client = client;
     
-    return handler(req, res);
+    return await handler(req, res);
   } catch (error) {
     console.error('Authentication error:', error);
-    await client.end();
     return res.status(401).json({ 
       success: false,
       error: 'INVALID_TOKEN', 
       message: '⚠️ Token ไม่ถูกต้องหรือหมดอายุ กรุณาเข้าสู่ระบบใหม่' 
     });
+  } finally {
+    client.release();
   }
 };
 
@@ -387,8 +377,6 @@ const handler = async (req, res) => {
         message: '❌ เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่อีกครั้ง',
         details: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
-    } finally {
-      await client.end();
     }
   })(req, res);
 };

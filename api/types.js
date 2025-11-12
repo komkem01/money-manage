@@ -1,13 +1,4 @@
-const { Client } = require('pg');
-
-const getClient = async () => {
-  const client = new Client({
-    connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false },
-  });
-  await client.connect();
-  return client;
-};
+const { getClient } = require('./_db');
 
 const handler = async (req, res) => {
   res.setHeader('Access-Control-Allow-Credentials', true);
@@ -53,7 +44,7 @@ const handler = async (req, res) => {
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   } finally {
-    await client.end();
+    client.release();
   }
 };
 
