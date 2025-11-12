@@ -2,6 +2,8 @@
 import React, { useState } from "react";
 import { useRouter } from 'next/navigation';
 import { loginUser, storeAuthToken, storeUserData, getAuthToken, getUserData } from '@/lib/auth';
+import NotificationModal from '@/components/NotificationModal';
+import { useNotification } from '@/components/useNotification';
 
 // --- ไอคอน SVG ---
 const LockIcon = () => (
@@ -48,9 +50,16 @@ const LoginPage: React.FC = () => {
 
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
-  const [error, setError] = useState<string>("");
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false); // (ใหม่)
-  const [showToast, setShowToast] = useState<boolean>(false); // (ใหม่)
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  
+  // ใช้ notification hook
+  const {
+    notification,
+    isOpen,
+    hideNotification,
+    showSuccess,
+    showError,
+  } = useNotification();
 
   /**
    * จัดการการส่งฟอร์มเข้าสู่ระบบ
@@ -60,7 +69,6 @@ const LoginPage: React.FC = () => {
     e.preventDefault();
     if (isSubmitting) return; // กันกดซ้ำ
 
-    setError(""); // เคลียร์ข้อความ error เก่า
     setIsSubmitting(true); // เริ่มกระบวนการ
 
     try {
@@ -90,8 +98,16 @@ const LoginPage: React.FC = () => {
         console.log("Token stored successfully:", !!storedToken);
         console.log("User data stored successfully:", !!storedUser);
 
-        // 6. แสดง Toast สำเร็จ
-        setShowToast(true);
+        // 6. แสดง notification สำเร็จ
+        showSuccess(
+          "เข้าสู่ระบบสำเร็จ!",
+          `ยินดีต้อนรับ ${response.data.user.firstname || response.data.user.email}`,
+          {
+            autoClose: true,
+            autoCloseDelay: 2000,
+            onConfirm: () => router.push('/dashboard')
+          }
+        );
 
         // 7. เด้งไปหน้า dashboard (เพราะได้ token แล้ว)
         setTimeout(() => {
@@ -100,20 +116,16 @@ const LoginPage: React.FC = () => {
       }
     } catch (error: any) {
       console.error("Login failed:", error);
-      setError(error.message || "อีเมลหรือรหัสผ่านไม่ถูกต้อง");
+      showError(
+        "เข้าสู่ระบบไม่สำเร็จ",
+        error.message || "อีเมลหรือรหัสผ่านไม่ถูกต้อง กรุณาตรวจสอบและลองใหม่อีกครั้ง"
+      );
       setIsSubmitting(false);
     }
   };
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4 font-inter">
-      {/* --- (ใหม่) Toast Notification --- */}
-      {showToast && (
-        <div className="fixed top-5 right-5 z-50 bg-green-600 text-white px-6 py-4 rounded-lg shadow-lg flex items-center animate-pulse">
-          <CheckCircleIcon />
-          <span>เข้าสู่ระบบสำเร็จ! กำลังไปหน้าหลัก...</span>
-        </div>
-      )}
 
       <div className="w-full max-w-md bg-white rounded-lg shadow-xl p-8 transition-all">
         {/* --- Header --- */}
@@ -165,10 +177,7 @@ const LoginPage: React.FC = () => {
             />
           </div>
 
-          {/* แสดงข้อความ Error (ถ้ามี) */}
-          {error && (
-            <div className="text-sm text-center text-red-600">{error}</div>
-          )}
+
 
           {/* ปุ่มเข้าสู่ระบบ */}
           <button
@@ -197,6 +206,25 @@ const LoginPage: React.FC = () => {
           </p>
         </div>
       </div>
+
+      {/* Notification Modal */}
+      {notification && (
+        <NotificationModal
+          isOpen={isOpen}
+          onClose={hideNotification}
+          type={notification.type}
+          title={notification.title}
+          message={notification.message}
+          autoClose={notification.autoClose}
+          autoCloseDelay={notification.autoCloseDelay}
+          showConfirmButton={notification.showConfirmButton}
+          confirmButtonText={notification.confirmButtonText}
+          showCancelButton={notification.showCancelButton}
+          cancelButtonText={notification.cancelButtonText}
+          onConfirm={notification.onConfirm}
+          onCancel={notification.onCancel}
+        />
+      )}
     </div>
   );
 }

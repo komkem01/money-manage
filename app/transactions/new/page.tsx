@@ -7,6 +7,8 @@ import { getAllCategories } from '@/lib/categories';
 import { getAuthToken } from '@/lib/auth';
 import { Account, Category } from '@/lib/types';
 import AuthGuard from '@/components/AuthGuard';
+import NotificationModal from '@/components/NotificationModal';
+import { useNotification } from '@/components/useNotification';
 
 // --- ไอคอน SVG ---
 const ArrowLeftIcon = () => (

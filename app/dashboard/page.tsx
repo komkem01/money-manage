@@ -6,6 +6,8 @@ import { getAllAccounts } from '@/lib/accounts';
 import { getAllTransactions } from '@/lib/transactions';
 import { Account, Transaction } from '@/lib/types';
 import AuthGuard from '@/components/AuthGuard';
+import NotificationModal from '@/components/NotificationModal';
+import { useNotification } from '@/components/useNotification';
 
 // --- ไอคอน SVG ---
 const LogOutIcon = () => (
@@ -184,15 +186,29 @@ function DashboardPage() {
     recentTransactions: [],
     accounts: []
   });
-  const [showLogoutToast, setShowLogoutToast] = useState(false);
+
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
+  
+  // ฟิลเตอร์เดือน
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  
+  // ใช้ notification hook
+  const {
+    notification,
+    isOpen,
+    hideNotification,
+    showSuccess,
+    showError,
+    showConfirmation,
+  } = useNotification();
 
   /**
    * โหลดข้อมูล Dashboard จาก API
    */
-  const loadDashboardData = async (userData: any) => {
+  const loadDashboardData = async (userData: any, filterMonth?: number, filterYear?: number) => {
     try {
       setLoading(true);
       setError('');
@@ -220,22 +236,28 @@ function DashboardPage() {
       let totalExpense = 0;
 
       if (transactionsResponse.success && transactionsResponse.data) {
-        const currentMonth = new Date().getMonth();
-        const currentYear = new Date().getFullYear();
+        const targetMonth = filterMonth !== undefined ? filterMonth : selectedMonth;
+        const targetYear = filterYear !== undefined ? filterYear : selectedYear;
 
-        // แปลงข้อมูลธุรกรรมและคำนวณสถิติ
-        recentTransactions = transactionsResponse.data.slice(0, 3).map((tx: any) => {
+        // คำนวณรายรับ/รายจ่ายจากธุรกรรมทั้งหมดในเดือนที่เลือก
+        transactionsResponse.data.forEach((tx: any) => {
           const txDate = new Date(parseInt(tx.date));
           const amount = parseFloat(tx.amount);
           
-          // คำนวณรายรับ/รายจ่ายเฉพาะเดือนปัจจุบัน
-          if (txDate.getMonth() === currentMonth && txDate.getFullYear() === currentYear) {
+          // คำนวณรายรับ/รายจ่ายเฉพาะเดือนที่เลือก
+          if (txDate.getMonth() === targetMonth && txDate.getFullYear() === targetYear) {
             if (tx.category?.type?.name === 'Income') {
               totalIncome += amount;
             } else if (tx.category?.type?.name === 'Expense') {
               totalExpense += amount;
             }
           }
+        });
+
+        // แปลงข้อมูลธุรกรรมสำหรับแสดงผล (เฉพาะ 3 รายการล่าสุด)
+        recentTransactions = transactionsResponse.data.slice(0, 3).map((tx: any) => {
+          const txDate = new Date(parseInt(tx.date));
+          const amount = parseFloat(tx.amount);
 
           return {
             id: tx.id,
@@ -272,6 +294,19 @@ function DashboardPage() {
       setError('เกิดข้อผิดพลาดในการโหลดข้อมูล');
     } finally {
       setLoading(false);
+    }
+  };
+
+  /**
+   * จัดการการเปลี่ยนเดือนฟิลเตอร์
+   */
+  const handleMonthFilterChange = async (month: number, year: number) => {
+    setSelectedMonth(month);
+    setSelectedYear(year);
+    
+    const userData = getUserData();
+    if (userData) {
+      await loadDashboardData(userData, month, year);
     }
   };
 
@@ -318,16 +353,35 @@ function DashboardPage() {
    * จัดการการออกจากระบบ
    */
   const handleLogout = () => {
-    console.log("Logout initiated...");
-    setShowLogoutToast(true);
+    showConfirmation(
+      "ยืนยันการออกจากระบบ",
+      "คุณต้องการออกจากระบบหรือไม่? คุณจะต้องเข้าสู่ระบบใหม่อีกครั้ง",
+      () => {
+        console.log("Logout confirmed...");
+        
+        // ลบ token และ user data
+        removeAuthToken();
+        removeUserData();
 
-    // ลบ token และ user data
-    removeAuthToken();
-    removeUserData();
+        showSuccess(
+          "ออกจากระบบสำเร็จ",
+          "ขอบคุณที่ใช้บริการ เราหวังว่าจะได้พบคุณอีกครั้ง",
+          {
+            autoClose: true,
+            autoCloseDelay: 2000,
+            onConfirm: () => router.push('/login')
+          }
+        );
 
-    setTimeout(() => {
-      router.push('/login');
-    }, 2000);
+        setTimeout(() => {
+          router.push('/login');
+        }, 2000);
+      },
+      {
+        confirmButtonText: "ออกจากระบบ",
+        cancelButtonText: "ยกเลิก"
+      }
+    );
   };
 
   // ลบ mockNavigate
@@ -335,13 +389,7 @@ function DashboardPage() {
   return (
     <AuthGuard>
       <div className="min-h-screen bg-gray-100 font-inter">
-      {/* --- (ใหม่) Toast ออกจากระบบ --- */}
-      {showLogoutToast && (
-        <div className="fixed top-5 right-5 z-50 bg-blue-600 text-white px-6 py-4 rounded-lg shadow-lg flex items-center animate-pulse">
-          <CheckCircleIcon />
-          <span>ออกจากระบบสำเร็จ! กำลังกลับไปหน้า Login...</span>
-        </div>
-      )}
+
 
       {/* --- Header --- */}
       <header className="bg-white shadow-md">
@@ -362,7 +410,7 @@ function DashboardPage() {
               <button
                 onClick={() => {
                   const userData = getUserData();
-                  if (userData) loadDashboardData(userData);
+                  if (userData) loadDashboardData(userData, selectedMonth, selectedYear);
                 }}
                 disabled={loading}
                 className="flex items-center px-3 py-2 text-sm font-medium rounded-md text-blue-600 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
@@ -376,8 +424,7 @@ function DashboardPage() {
 
               <button
                 onClick={handleLogout}
-                disabled={showLogoutToast}
-                className="flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-red-600 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
+                className="flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-red-600 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
               >
                 <LogOutIcon />
                 <span className="ml-2">ออกจากระบบ</span>
@@ -404,7 +451,7 @@ function DashboardPage() {
             <button
               onClick={() => {
                 const userData = getUserData();
-                if (userData) loadDashboardData(userData);
+                if (userData) loadDashboardData(userData, selectedMonth, selectedYear);
               }}
               className="mt-2 px-4 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700"
             >
@@ -418,7 +465,57 @@ function DashboardPage() {
         {/* Content wrapper เพื่อซ่อนเมื่อ loading หรือ error */}
         {/* --- 1. ภาพรวม (Overview Section) --- */}
         <section className="mb-8">
-          <h2 className="text-2xl font-semibold text-gray-800 mb-4">ภาพรวม</h2>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
+            <h2 className="text-2xl font-semibold text-gray-800">ภาพรวม</h2>
+            
+            {/* ฟิลเตอร์เดือน */}
+            <div className="flex items-center space-x-2 bg-white px-3 py-2 rounded-lg border border-gray-200 shadow-sm">
+              <svg className="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <label className="text-sm font-medium text-gray-700">เดือน:</label>
+              <select
+                value={`${selectedYear}-${selectedMonth.toString().padStart(2, '0')}`}
+                onChange={(e) => {
+                  const [year, month] = e.target.value.split('-');
+                  handleMonthFilterChange(parseInt(month), parseInt(year));
+                }}
+                className="border-0 bg-transparent text-sm font-medium text-gray-700 focus:outline-none cursor-pointer"
+              >
+                {(() => {
+                  const options = [];
+                  const currentDate = new Date();
+                  // สร้างตัวเลือก 12 เดือนย้อนหลัง
+                  for (let i = 0; i < 12; i++) {
+                    const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
+                    const year = date.getFullYear();
+                    const month = date.getMonth();
+                    const monthNames = [
+                      'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+                      'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+                    ];
+                    options.push(
+                      <option key={`${year}-${month}`} value={`${year}-${month.toString().padStart(2, '0')}`}>
+                        {monthNames[month]} {year}
+                      </option>
+                    );
+                  }
+                  return options;
+                })()}
+              </select>
+              {(selectedMonth !== new Date().getMonth() || selectedYear !== new Date().getFullYear()) && (
+                <button
+                  onClick={() => {
+                    const now = new Date();
+                    handleMonthFilterChange(now.getMonth(), now.getFullYear());
+                  }}
+                  className="ml-2 px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                >
+                  เดือนนี้
+                </button>
+              )}
+            </div>
+          </div>
           
           {/* แสดงข้อมูลสรุปบัญชี */}
           {data.accounts.length > 0 && (
@@ -441,7 +538,7 @@ function DashboardPage() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {/* การ์ด: ยอดคงเหลือ */}
             <div className="bg-white p-6 rounded-lg shadow-lg transition-transform hover:scale-105">
               <h3 className="text-lg font-medium text-gray-500">ยอดคงเหลือ</h3>
@@ -458,7 +555,13 @@ function DashboardPage() {
               <div className="flex justify-between items-start">
                 <div>
                   <h3 className="text-lg font-medium text-gray-500">
-                    รายรับ (เดือนนี้)
+                    รายรับ ({(() => {
+                      const monthNames = [
+                        'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
+                        'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'
+                      ];
+                      return monthNames[selectedMonth] + ' ' + selectedYear;
+                    })()})
                   </h3>
                   <p className="text-3xl font-bold text-green-600 mt-2">
                     ฿
@@ -476,7 +579,13 @@ function DashboardPage() {
               <div className="flex justify-between items-start">
                 <div>
                   <h3 className="text-lg font-medium text-gray-500">
-                    รายจ่าย (เดือนนี้)
+                    รายจ่าย ({(() => {
+                      const monthNames = [
+                        'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
+                        'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'
+                      ];
+                      return monthNames[selectedMonth] + ' ' + selectedYear;
+                    })()})
                   </h3>
                   <p className="text-3xl font-bold text-red-600 mt-2">
                     ฿
@@ -486,6 +595,44 @@ function DashboardPage() {
                   </p>
                 </div>
                 <ArrowDownLeftIcon />
+              </div>
+            </div>
+
+            {/* การ์ด: กำไร/ขาดทุน */}
+            <div className="bg-white p-6 rounded-lg shadow-lg transition-transform hover:scale-105">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="text-lg font-medium text-gray-500">
+                    กำไร/ขาดทุน ({(() => {
+                      const monthNames = [
+                        'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
+                        'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'
+                      ];
+                      return monthNames[selectedMonth] + ' ' + selectedYear;
+                    })()})
+                  </h3>
+                  <p className={`text-3xl font-bold mt-2 ${
+                    data.totalIncome - data.totalExpense >= 0 ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {data.totalIncome - data.totalExpense >= 0 ? '+' : ''}฿
+                    {(data.totalIncome - data.totalExpense).toLocaleString("th-TH", {
+                      minimumFractionDigits: 2,
+                    })}
+                  </p>
+                </div>
+                <div className={`p-2 rounded-full ${
+                  data.totalIncome - data.totalExpense >= 0 ? 'bg-green-100' : 'bg-red-100'
+                }`}>
+                  {data.totalIncome - data.totalExpense >= 0 ? (
+                    <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                    </svg>
+                  ) : (
+                    <svg className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
+                    </svg>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -591,6 +738,25 @@ function DashboardPage() {
         </>
         )}
       </main>
+
+      {/* Notification Modal */}
+      {notification && (
+        <NotificationModal
+          isOpen={isOpen}
+          onClose={hideNotification}
+          type={notification.type}
+          title={notification.title}
+          message={notification.message}
+          autoClose={notification.autoClose}
+          autoCloseDelay={notification.autoCloseDelay}
+          showConfirmButton={notification.showConfirmButton}
+          confirmButtonText={notification.confirmButtonText}
+          showCancelButton={notification.showCancelButton}
+          cancelButtonText={notification.cancelButtonText}
+          onConfirm={notification.onConfirm}
+          onCancel={notification.onCancel}
+        />
+      )}
       </div>
     </AuthGuard>
   );

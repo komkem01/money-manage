@@ -2,6 +2,8 @@
 import React, { useState } from "react";
 import { useRouter } from 'next/navigation';
 import { registerUser, storeAuthToken, storeUserData, getAuthToken, getUserData } from '@/lib/auth';
+import NotificationModal from '@/components/NotificationModal';
+import { useNotification } from '@/components/useNotification';
 
 // --- ไอคอน SVG ---
 const UserPlusIcon = () => (
@@ -65,9 +67,16 @@ const RegisterPage: React.FC = () => {
     password: "",
     confirmPassword: "",
   });
-  const [error, setError] = useState<string>("");
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false); // (ใหม่) กันการกดซ้ำ
-  const [showToast, setShowToast] = useState<boolean>(false); // (ใหม่) สถานะ Toast
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  
+  // ใช้ notification hook
+  const {
+    notification,
+    isOpen,
+    hideNotification,
+    showSuccess,
+    showError,
+  } = useNotification();
 
   /**
    * จัดการการเปลี่ยนแปลงข้อมูลใน Input
@@ -85,17 +94,15 @@ const RegisterPage: React.FC = () => {
     e.preventDefault();
     if (isSubmitting) return; // ป้องกันการกดซ้ำ
 
-    setError(""); // เคลียร์ข้อความ error เก่า
-
     // 1. ตรวจสอบรหัสผ่าน
     if (formData.password !== formData.confirmPassword) {
-      setError("รหัสผ่านไม่ตรงกัน");
+      showError("รหัสผ่านไม่ตรงกัน", "กรุณาตรวจสอบรหัสผ่านให้ตรงกัน");
       return;
     }
 
     // 2. ตรวจสอบความยาวรหัสผ่าน
     if (formData.password.length < 6) {
-      setError("รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร");
+      showError("รหัสผ่านสั้นเกินไป", "รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร");
       return;
     }
 
@@ -132,8 +139,16 @@ const RegisterPage: React.FC = () => {
         console.log("Token stored successfully:", !!storedToken);
         console.log("User data stored successfully:", !!storedUser);
 
-        // 6. แสดง Toast สำเร็จ
-        setShowToast(true);
+        // 6. แสดง notification สำเร็จ
+        showSuccess(
+          "ลงทะเบียนสำเร็จ!",
+          `ยินดีต้อนรับ ${userData.firstname}! บัญชีของคุณถูกสร้างเรียบร้อยแล้ว`,
+          {
+            autoClose: true,
+            autoCloseDelay: 2000,
+            onConfirm: () => router.push('/dashboard')
+          }
+        );
 
         // 7. เด้งไปหน้า dashboard (เพราะได้ token แล้ว)
         setTimeout(() => {
@@ -142,20 +157,16 @@ const RegisterPage: React.FC = () => {
       }
     } catch (error: any) {
       console.error("Register failed:", error);
-      setError(error.message || "เกิดข้อผิดพลาดในการลงทะเบียน กรุณาลองใหม่");
+      showError(
+        "ลงทะเบียนไม่สำเร็จ",
+        error.message || "เกิดข้อผิดพลาดในการลงทะเบียน กรุณาตรวจสอบข้อมูลและลองใหม่อีกครั้ง"
+      );
       setIsSubmitting(false);
     }
   };
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4 font-inter">
-      {/* --- (ใหม่) Toast Notification --- */}
-      {showToast && (
-        <div className="fixed top-5 right-5 z-50 bg-green-600 text-white px-6 py-4 rounded-lg shadow-lg flex items-center animate-pulse">
-          <CheckCircleIcon />
-          <span>ลงทะเบียนสำเร็จ! กำลังไปหน้าเข้าสู่ระบบ...</span>
-        </div>
-      )}
 
       <div className="w-full max-w-lg bg-white rounded-lg shadow-xl p-8 transition-all my-8">
         {/* --- Header --- */}
@@ -301,10 +312,7 @@ const RegisterPage: React.FC = () => {
             />
           </div>
 
-          {/* แสดงข้อความ Error (ถ้ามี) */}
-          {error && (
-            <div className="text-sm text-center text-red-600">{error}</div>
-          )}
+
 
           {/* ปุ่มลงทะเบียน */}
           <button
@@ -336,6 +344,25 @@ const RegisterPage: React.FC = () => {
           </p>
         </div>
       </div>
+
+      {/* Notification Modal */}
+      {notification && (
+        <NotificationModal
+          isOpen={isOpen}
+          onClose={hideNotification}
+          type={notification.type}
+          title={notification.title}
+          message={notification.message}
+          autoClose={notification.autoClose}
+          autoCloseDelay={notification.autoCloseDelay}
+          showConfirmButton={notification.showConfirmButton}
+          confirmButtonText={notification.confirmButtonText}
+          showCancelButton={notification.showCancelButton}
+          cancelButtonText={notification.cancelButtonText}
+          onConfirm={notification.onConfirm}
+          onCancel={notification.onCancel}
+        />
+      )}
     </div>
   );
 }
